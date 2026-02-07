@@ -1,0 +1,46 @@
+# ==============================================================================
+# Diffusion Policy for Simulated Robot Control — Dependencies
+# ==============================================================================
+#
+# Install with: pip install -r requirements.txt
+#
+# These are pinned to minimum versions for reproducibility. The project is
+# developed on macOS (CPU / Apple MPS) and trained on Linux (CUDA GPU), so
+# we do NOT pin to specific CUDA builds of PyTorch here. Install the correct
+# PyTorch build for your platform first if needed:
+#   https://pytorch.org/get-started/locally/
+#
+# ==============================================================================
+
+# ---- Core Deep Learning ----
+torch>=2.0
+torchvision>=0.15          # needed by some env rendering utilities
+
+# ---- Numerical / Scientific ----
+numpy>=1.24
+scipy>=1.10                # for potential ODE solvers in Flow Matching (Phase 5)
+
+# ---- Data Loading ----
+zarr>=2.14                 # PushT expert demo dataset is stored in Zarr format
+h5py>=3.8                  # alternative dataset format support
+
+# ---- Simulation Environment ----
+gymnasium>=0.28            # OpenAI Gym successor — PushT env interface
+pygame>=2.3                # PushT rendering backend
+pymunk>=6.4                # 2D physics engine used by PushT
+shapely>=2.0               # geometric computations for PushT reward
+
+# ---- Visualization & Logging ----
+matplotlib>=3.7
+tqdm>=4.65                 # progress bars for training loops
+imageio>=2.28              # saving rollout GIFs / videos
+imageio-ffmpeg>=0.4        # ffmpeg backend for video encoding
+
+# ---- Tensor Utilities ----
+einops>=0.6                # clean, readable tensor reshaping (e.g., rearrange)
+
+# ---- Reference Implementations (optional but useful) ----
+diffusers>=0.25            # HuggingFace diffusers: reference DDPM/DDIM schedulers
+
+# ---- Reproducibility & Config ----
+pyyaml>=6.0                # if we later switch config to YAML

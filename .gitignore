@@ -1,0 +1,63 @@
+# ==============================================================================
+# .gitignore for Diffusion Policy Project
+# ==============================================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ---- Virtual Environment ----
+# Use leading slash to match ONLY top-level venv directories,
+# not diffusion_policy/env/ (our source code).
+/venv/
+/.venv/
+/env/
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ---- Data (too large for git) ----
+# Use /data/ with leading slash to match ONLY the top-level data/ directory
+# (where the Zarr dataset lives), NOT diffusion_policy/data/ (our Python source).
+/data/
+*.zarr
+*.zarr/
+*.hdf5
+*.h5
+*.pkl
+*.pickle
+
+# ---- Model Checkpoints (too large for git) ----
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# ---- Training Logs & Outputs ----
+logs/
+runs/
+wandb/
+outputs/
+*.log
+
+# ---- Jupyter Notebooks (optional: track .ipynb but ignore checkpoints) ----
+.ipynb_checkpoints/
+
+# ---- Miscellaneous ----
+*.mp4
+*.gif
+*.png
+*.jpg
+!docs/*.png
+!docs/*.jpg
