@@ -8,3 +8,7 @@ training and evaluation pipelines.
 Modules:
     pusht_env.py — PushT environment wrapper with consistent observation/action API
 """
+
+from diffusion_policy.env.pusht_env import PushTEnv
+
+__all__ = ["PushTEnv"]
