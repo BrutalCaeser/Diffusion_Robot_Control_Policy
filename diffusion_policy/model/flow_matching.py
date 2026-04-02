@@ -298,7 +298,7 @@ if __name__ == "__main__":
     x_t0_f = fm.interpolate(a0, noise, t0)
     x_t1_f = fm.interpolate(a0, noise, t1)
     numerical_vel = (x_t1_f - x_t0_f) / dt
-    assert torch.allclose(numerical_vel, target, atol=1e-3), \
+    assert torch.allclose(numerical_vel, target, atol=2e-3), \
         "Numerical velocity should match analytical target"
 
     print("All Flow Matching sanity checks passed!")

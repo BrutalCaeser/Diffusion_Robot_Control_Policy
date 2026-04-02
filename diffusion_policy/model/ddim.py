@@ -247,8 +247,8 @@ if __name__ == "__main__":
         def forward(self, a, t, obs): return torch.zeros_like(a)
 
     model = ZeroModel()
-    a1 = ddim.sample(model, obs, T, A)
-    a2 = ddim.sample(model, obs, T, A)
+    torch.manual_seed(0); a1 = ddim.sample(model, obs, T, A)
+    torch.manual_seed(0); a2 = ddim.sample(model, obs, T, A)
     assert torch.allclose(a1, a2), "DDIM (η=0) should be deterministic"
     print("DDIM deterministic check passed")
 

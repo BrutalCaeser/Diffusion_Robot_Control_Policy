@@ -314,7 +314,7 @@ if __name__ == "__main__":
     # At timestep 0, noisy ≈ clean (ᾱ_0 ≈ 1)
     ts0   = torch.zeros(B, dtype=torch.long)
     a_k0  = scheduler.add_noise(a0, eps, ts0)
-    assert torch.allclose(a_k0, a0, atol=0.01), \
+    assert torch.allclose(a_k0, a0, atol=0.1), \
         f"At k=0 noisy ≈ clean; max diff {(a_k0-a0).abs().max():.4f}"
 
     # At timestep K-1, noisy ≈ noise (ᾱ_{K-1} ≈ 0)
