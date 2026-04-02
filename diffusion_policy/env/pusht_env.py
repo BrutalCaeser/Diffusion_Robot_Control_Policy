@@ -94,7 +94,9 @@ class PushTEnv:
         self._env = gym.make(
             "gym_pusht/PushT-v0",
             obs_type="state",
-            render_size=render_size,
+            render_mode="rgb_array",
+            observation_width=render_size,
+            observation_height=render_size,
             max_episode_steps=max_episode_steps,
         )
         self.obs_dim: int = 5
