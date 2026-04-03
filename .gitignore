@@ -61,3 +61,6 @@ outputs/
 *.jpg
 !docs/*.png
 !docs/*.jpg
+
+# macOS resource forks
+._*
