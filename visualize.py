@@ -85,7 +85,7 @@ def plot_dataset_summary(
         save_dir:     Output directory for saved plots.
     """
     import zarr
-    root = zarr.open(dataset_path, "r")
+    root = zarr.open(store=dataset_path, mode="r")
     states  = root["data"]["state"][:]        # (N, 5)
     actions = root["data"]["action"][:]       # (N, 2)
     ep_ends = root["meta"]["episode_ends"][:] # (num_eps,)
