@@ -329,12 +329,21 @@ class ConditionalUnet1D(nn.Module):
         # Conditioning encoders                                               #
         # ------------------------------------------------------------------ #
         obs_feature_dim = obs_horizon * obs_dim   # e.g. 2*5 = 10
+        self._obs_feature_dim = obs_feature_dim   # stored for forward dispatch
 
-        self.obs_encoder = nn.Sequential(
-            nn.Linear(obs_feature_dim, cond_dim),
-            nn.Mish(),
-            nn.Linear(cond_dim, cond_dim),
-        )
+        # When obs_feature_dim == 0 (image-based obs — encoder lives outside
+        # this module and injects a pre-computed (B, cond_dim) vector), we
+        # create an Identity placeholder so that state_dict keys stay consistent
+        # regardless of obs_type.  The forward() detects the 2-D shortcut.
+        if obs_feature_dim > 0:
+            self.obs_encoder = nn.Sequential(
+                nn.Linear(obs_feature_dim, cond_dim),
+                nn.Mish(),
+                nn.Linear(cond_dim, cond_dim),
+            )
+        else:
+            # Identity — will be bypassed in forward(); image cond injected directly.
+            self.obs_encoder = nn.Identity()
 
         self.timestep_encoder = nn.Sequential(
             SinusoidalPosEmb(diffusion_step_embed_dim),
@@ -441,10 +450,16 @@ class ConditionalUnet1D(nn.Module):
         x = noisy_actions.permute(0, 2, 1)              # (B, action_dim, T_pred)
 
         # ---- Encode conditioning ------------------------------------------
-        # Flatten obs history: (B, T_obs, obs_dim) → (B, T_obs*obs_dim)
-        obs_emb  = self.obs_encoder(obs.reshape(B, -1)) # (B, cond_dim)
-        t_emb    = self.timestep_encoder(timestep)       # (B, diffusion_step_embed_dim)
-        cond     = torch.cat([t_emb, obs_emb], dim=-1)  # (B, total_cond_dim)
+        if self._obs_feature_dim > 0:
+            # State-based path: flatten (B, T_obs, obs_dim) → (B, T_obs*obs_dim)
+            #                   then project through MLP → (B, cond_dim)
+            obs_emb = self.obs_encoder(obs.reshape(B, -1))  # (B, cond_dim)
+        else:
+            # Image-based path: obs is already a (B, cond_dim) vector produced
+            # by an external ResNetEncoder; bypass the internal obs_encoder.
+            obs_emb = obs                                    # (B, cond_dim)
+        t_emb    = self.timestep_encoder(timestep)           # (B, diffusion_step_embed_dim)
+        cond     = torch.cat([t_emb, obs_emb], dim=-1)      # (B, total_cond_dim)
 
         # ---- Encoder (save skip connections before downsampling) ----------
         skips: list[torch.Tensor] = []

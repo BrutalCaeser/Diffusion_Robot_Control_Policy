@@ -52,11 +52,13 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from config import TrainConfig
-from diffusion_policy.data.dataset import PushTStateDataset
-from diffusion_policy.model.unet1d import ConditionalUnet1D
-from diffusion_policy.model.ddpm import DDPMScheduler
-from diffusion_policy.model.ddim import DDIMScheduler
-from diffusion_policy.model.ema import EMA
+from diffusion_policy.data.dataset       import PushTStateDataset
+from diffusion_policy.data.image_dataset import PushTImageDataset
+from diffusion_policy.model.unet1d       import ConditionalUnet1D
+from diffusion_policy.model.vision_encoder import ResNetEncoder
+from diffusion_policy.model.ddpm         import DDPMScheduler
+from diffusion_policy.model.ddim         import DDIMScheduler
+from diffusion_policy.model.ema          import EMA
 from diffusion_policy.model.flow_matching import FlowMatchingScheduler
 
 
@@ -250,12 +252,25 @@ def train(cfg: TrainConfig, resume_path: str | None = None) -> None:
     metric_log = MetricLogger(Path(cfg.log_dir) / f"{run_name}_metrics.csv")
 
     # ── Dataset & DataLoader ─────────────────────────────────────────────────
-    logger.info("Loading dataset from: %s", cfg.data.dataset_path)
-    dataset = PushTStateDataset(
-        dataset_path=cfg.data.dataset_path,
-        obs_horizon=cfg.data.obs_horizon,
-        pred_horizon=cfg.data.pred_horizon,
+    logger.info(
+        "Loading dataset from: %s  [obs_type=%s]",
+        cfg.data.dataset_path, cfg.data.obs_type,
     )
+    if cfg.data.obs_type == "image":
+        dataset = PushTImageDataset(
+            dataset_path=cfg.data.dataset_path,
+            obs_horizon=cfg.data.obs_horizon,
+            pred_horizon=cfg.data.pred_horizon,
+        )
+        obs_normalizer    = None          # images are not min-max normalised
+        action_normalizer = dataset.get_action_normalizer()
+    else:
+        dataset = PushTStateDataset(
+            dataset_path=cfg.data.dataset_path,
+            obs_horizon=cfg.data.obs_horizon,
+            pred_horizon=cfg.data.pred_horizon,
+        )
+        obs_normalizer, action_normalizer = dataset.get_normalizers()
     logger.info("Dataset: %s", dataset)
 
     dataloader = DataLoader(
@@ -271,20 +286,44 @@ def train(cfg: TrainConfig, resume_path: str | None = None) -> None:
         cfg.batch_size, cfg.num_workers, len(dataloader),
     )
 
-    obs_normalizer, action_normalizer = dataset.get_normalizers()
-
     # ── Model ────────────────────────────────────────────────────────────────
+    # For image observations the UNet conditioning comes from the ResNetEncoder
+    # (obs_cond_dim) instead of the flattened state vector (obs_horizon * obs_dim).
+    # Both must equal cfg.model.cond_dim.
+    vision_encoder: ResNetEncoder | None = None
+    if cfg.data.obs_type == "image":
+        vision_encoder = ResNetEncoder(
+            obs_horizon    = cfg.data.obs_horizon,
+            obs_cond_dim   = cfg.vision.obs_cond_dim,
+            pretrained     = cfg.vision.pretrained,
+            freeze_backbone= cfg.vision.freeze_backbone,
+        ).to(cfg.device)
+        logger.info("VisionEncoder: %s", vision_encoder)
+        # The UNet's obs_dim is set to 0 when using a vision encoder so that
+        # its internal obs embedding MLP is bypassed.  The cond vector is
+        # injected directly by the training loop (see below).
+        unet_obs_dim = 0
+    else:
+        unet_obs_dim = cfg.env.obs_dim
+
     model = ConditionalUnet1D(
         action_dim               = cfg.env.action_dim,
         obs_horizon              = cfg.data.obs_horizon,
-        obs_dim                  = cfg.env.obs_dim,
+        obs_dim                  = unet_obs_dim,
         diffusion_step_embed_dim = cfg.model.diffusion_step_embed_dim,
         down_dims                = cfg.model.down_dims,
         cond_dim                 = cfg.model.cond_dim,
         kernel_size              = cfg.model.kernel_size,
         n_groups                 = cfg.model.n_groups,
     ).to(cfg.device)
-    logger.info("Model parameters: %.2fM", model.num_parameters() / 1e6)
+    logger.info("UNet parameters: %.2fM", model.num_parameters() / 1e6)
+
+    # Combine UNet + VisionEncoder parameters for the optimizer
+    all_params = list(model.parameters())
+    if vision_encoder is not None:
+        all_params += list(vision_encoder.parameters())
+    total_params = sum(p.numel() for p in all_params) / 1e6
+    logger.info("Total trainable parameters: %.2fM", total_params)
 
     # ── Scheduler ────────────────────────────────────────────────────────────
     if cfg.method == "ddpm":
@@ -307,7 +346,7 @@ def train(cfg: TrainConfig, resume_path: str | None = None) -> None:
     ema = EMA(model, decay=cfg.ema_decay)
 
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        all_params,
         lr           = cfg.learning_rate,
         betas        = cfg.betas,
         weight_decay = cfg.weight_decay,
@@ -340,10 +379,23 @@ def train(cfg: TrainConfig, resume_path: str | None = None) -> None:
         epoch_loss = 0.0
         t0 = time.time()
 
+        if vision_encoder is not None:
+            vision_encoder.train()
         pbar = tqdm(dataloader, desc=f"Epoch {epoch+1:04d}/{cfg.num_epochs}", leave=False)
         for batch in pbar:
-            obs    = batch["obs"].to(cfg.device, non_blocking=True)     # (B, T_obs, obs_dim)
-            action = batch["action"].to(cfg.device, non_blocking=True)  # (B, T_pred, action_dim)
+            obs_raw = batch["obs"].to(cfg.device, non_blocking=True)
+            action  = batch["action"].to(cfg.device, non_blocking=True)  # (B, T_pred, 2)
+
+            # ── Encode observations ────────────────────────────────────────
+            if vision_encoder is not None:
+                # obs_raw: (B, T_obs, 3, H, W) — encode to (B, cond_dim)
+                # We pass it as obs to the UNet; since unet_obs_dim=0 the UNet
+                # ignores the obs input and relies on the pre-computed cond
+                # vector injected via the 'obs' argument being a 2-D tensor
+                # (B, cond_dim) rather than (B, T_obs, obs_dim).
+                obs = vision_encoder(obs_raw)   # (B, cond_dim) — used directly
+            else:
+                obs = obs_raw                   # (B, T_obs, obs_dim) — state
 
             # ── Compute loss ──────────────────────────────────────────────
             if cfg.method == "ddpm":
@@ -396,7 +448,7 @@ def train(cfg: TrainConfig, resume_path: str | None = None) -> None:
                 ema                     = ema,
                 optimizer               = optimizer,
                 lr_scheduler            = lr_sched,
-                obs_normalizer_state    = obs_normalizer.state_dict(),
+                obs_normalizer_state    = obs_normalizer.state_dict() if obs_normalizer else {},
                 action_normalizer_state = action_normalizer.state_dict(),
                 metrics                 = best_metrics,
                 cfg                     = cfg,
@@ -436,7 +488,7 @@ def train(cfg: TrainConfig, resume_path: str | None = None) -> None:
                         ema                     = ema,
                         optimizer               = optimizer,
                         lr_scheduler            = lr_sched,
-                        obs_normalizer_state    = obs_normalizer.state_dict(),
+                        obs_normalizer_state    = obs_normalizer.state_dict() if obs_normalizer else {},
                         action_normalizer_state = action_normalizer.state_dict(),
                         metrics                 = best_metrics,
                         cfg                     = cfg,
@@ -476,6 +528,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--log_dir",         type=str,   default=None)
     p.add_argument("--device",          type=str,   default=None,
                    help="'cpu', 'cuda', 'mps', or None to auto-detect")
+    p.add_argument("--obs_type",        type=str,   default=None,
+                   help="'state' or 'image' — which observation modality to use")
     p.add_argument("--resume",          type=str,   default=None,
                    help="Path to checkpoint to resume training from")
 
@@ -493,6 +547,7 @@ def apply_overrides(cfg: TrainConfig, args: argparse.Namespace) -> TrainConfig:
     if args.checkpoint_dir is not None: cfg.checkpoint_dir      = args.checkpoint_dir
     if args.log_dir        is not None: cfg.log_dir             = args.log_dir
     if args.device         is not None: cfg.device              = args.device
+    if args.obs_type       is not None: cfg.data.obs_type       = args.obs_type
     return cfg
 
 

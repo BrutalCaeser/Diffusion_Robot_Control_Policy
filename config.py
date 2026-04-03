@@ -103,6 +103,12 @@ class DataConfig:
     pred_horizon: int = 16     # T_pred: number of future actions to predict
     action_horizon: int = 8    # T_action: number of predicted actions to execute
 
+    # --- Observation type ---
+    # "state" : use low-dimensional state vector (agent xy, block xy, angle)
+    # "image" : use raw RGB frames (96×96×3) from the environment camera
+    # The image variant is the true "visuomotor" policy from the paper.
+    obs_type: str = "state"
+
     # --- Dataset source ---
     dataset_path: str = "data/pusht_cchi_v7_replay.zarr"  # path to Zarr dataset
 
@@ -173,6 +179,41 @@ class ModelConfig:
     # This gives a receptive field that grows with depth, allowing deeper layers
     # to capture longer-range temporal dependencies in the action sequence.
     kernel_size: int = 5
+
+
+# ==============================================================================
+#  Vision Encoder Configuration (used when DataConfig.obs_type == "image")
+# ==============================================================================
+
+@dataclass
+class VisionEncoderConfig:
+    """
+    Parameters for the ResNet-18 visual encoder (visuomotor policy variant).
+
+    When ``DataConfig.obs_type = "image"``, the state vector is replaced by
+    a stack of T_obs RGB frames.  A ResNet-18 backbone encodes each frame into
+    a 512-dim feature; the features are concatenated and projected to
+    ``obs_cond_dim``, which must match ``ModelConfig.cond_dim``.
+
+    The architecture follows Chi et al. (RSS 2023):
+        - ResNet-18 body (no final avgpool / fc)
+        - Adaptive global average pooling → (512,) per frame
+        - Linear(T_obs × 512, obs_cond_dim) → ReLU → Linear(obs_cond_dim, obs_cond_dim)
+    """
+
+    # Output dimension of the vision encoder.
+    # This MUST equal ModelConfig.cond_dim so that the conditioning vector
+    # plugs directly into the FiLM layers of ConditionalUnet1D.
+    obs_cond_dim: int = 256
+
+    # Whether to initialise the ResNet-18 backbone with ImageNet weights.
+    # True  = fine-tune from a strong visual prior (recommended for limited data).
+    # False = train from scratch (cheaper, no internet needed at training start).
+    pretrained: bool = False
+
+    # Whether to freeze the ResNet-18 backbone and only train the projection MLP.
+    # Useful when pretrained=True and the dataset is small.
+    freeze_backbone: bool = False
 
 
 # ==============================================================================
@@ -287,6 +328,7 @@ class TrainConfig:
     env: EnvConfig = field(default_factory=EnvConfig)
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
+    vision: VisionEncoderConfig = field(default_factory=VisionEncoderConfig)
     diffusion: DiffusionConfig = field(default_factory=DiffusionConfig)
     flow_matching: FlowMatchingConfig = field(default_factory=FlowMatchingConfig)
 
@@ -376,6 +418,15 @@ class TrainConfig:
         assert self.diffusion.ddim_eta >= 0.0 and self.diffusion.ddim_eta <= 1.0, (
             f"ddim_eta must be in [0, 1], got {self.diffusion.ddim_eta}"
         )
+        assert self.data.obs_type in ("state", "image"), (
+            f"obs_type must be 'state' or 'image', got '{self.data.obs_type}'"
+        )
+        if self.data.obs_type == "image":
+            assert self.vision.obs_cond_dim == self.model.cond_dim, (
+                f"VisionEncoderConfig.obs_cond_dim ({self.vision.obs_cond_dim}) must "
+                f"equal ModelConfig.cond_dim ({self.model.cond_dim}) so the encoder "
+                f"output plugs directly into the UNet FiLM layers."
+            )
 
 
 # ==============================================================================

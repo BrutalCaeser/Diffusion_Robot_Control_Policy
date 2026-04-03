@@ -21,6 +21,10 @@ This sub-package contains:
 
     ema.py            — Exponential Moving Average helper for model weights.
                          Maintains a smoothed copy of weights for stable inference.
+
+    vision_encoder.py — ResNet-18 visual encoder for visuomotor diffusion policy.
+                         Encodes a stack of T_obs RGB frames (96×96×3) into a
+                         fixed-size conditioning vector for the 1D temporal U-Net.
 """
 
 from diffusion_policy.model.unet1d        import ConditionalUnet1D
@@ -28,6 +32,7 @@ from diffusion_policy.model.ema           import EMA
 from diffusion_policy.model.ddpm          import DDPMScheduler
 from diffusion_policy.model.ddim          import DDIMScheduler
 from diffusion_policy.model.flow_matching import FlowMatchingScheduler
+from diffusion_policy.model.vision_encoder import ResNetEncoder
 
 __all__ = [
     "ConditionalUnet1D",
@@ -35,4 +40,5 @@ __all__ = [
     "DDPMScheduler",
     "DDIMScheduler",
     "FlowMatchingScheduler",
+    "ResNetEncoder",
 ]

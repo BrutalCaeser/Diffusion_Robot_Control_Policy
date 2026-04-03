@@ -21,13 +21,13 @@ numpy>=1.24
 scipy>=1.10                # for potential ODE solvers in Flow Matching (Phase 5)
 
 # ---- Data Loading ----
-zarr>=2.14                 # PushT expert demo dataset is stored in Zarr format
+zarr>=2.14,<4              # PushT dataset; zarr v3 changed create_dataset API
 h5py>=3.8                  # alternative dataset format support
 
 # ---- Simulation Environment ----
 gymnasium>=0.28            # OpenAI Gym successor — PushT env interface
 pygame>=2.3                # PushT rendering backend
-pymunk>=6.4                # 2D physics engine used by PushT
+pymunk>=6.4,<7             # gym_pusht 0.1.6 uses add_collision_handler (removed in v7)
 shapely>=2.0               # geometric computations for PushT reward
 
 # ---- Visualization & Logging ----
