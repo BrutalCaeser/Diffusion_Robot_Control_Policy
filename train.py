@@ -532,6 +532,8 @@ def parse_args() -> argparse.Namespace:
                    help="'state' or 'image' — which observation modality to use")
     p.add_argument("--resume",          type=str,   default=None,
                    help="Path to checkpoint to resume training from")
+    p.add_argument("--save_interval",   type=int,   default=None,
+                   help="Save a checkpoint every N epochs (default: 50)")
 
     return p.parse_args()
 
@@ -548,6 +550,7 @@ def apply_overrides(cfg: TrainConfig, args: argparse.Namespace) -> TrainConfig:
     if args.log_dir        is not None: cfg.log_dir             = args.log_dir
     if args.device         is not None: cfg.device              = args.device
     if args.obs_type       is not None: cfg.data.obs_type       = args.obs_type
+    if args.save_interval  is not None: cfg.save_interval       = args.save_interval
     return cfg
 
 
