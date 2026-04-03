@@ -91,12 +91,13 @@ class PushTStateDataset(Dataset):
         if not dataset_path.exists():
             raise FileNotFoundError(
                 f"Dataset not found at {dataset_path}.\n"
-                "Download it with:\n"
-                "  python -c \"import urllib.request; "
-                "urllib.request.urlretrieve("
-                "'https://diffusion-policy.cs.columbia.edu/data/training/"
-                "pusht_cchi_v7_replay.zarr.zip', 'pusht.zip')\"\n"
-                "  unzip pusht.zip -d data/"
+                "Download the PushT expert demonstration dataset with:\n"
+                "  pip install gdown\n"
+                "  gdown --fuzzy 'https://drive.google.com/file/d/1ALQyEgMoVPBFxDgMVHWDCekqEFBQfGqs/view' -O pusht.zip\n"
+                "  unzip pusht.zip -d data/\n"
+                "Or clone the dataset from the diffusion_policy repo:\n"
+                "  git clone https://github.com/real-stanford/diffusion_policy\n"
+                "  cp -r diffusion_policy/data/pusht_cchi_v7_replay.zarr <dataset_path>"
             )
 
         # ------------------------------------------------------------------ #

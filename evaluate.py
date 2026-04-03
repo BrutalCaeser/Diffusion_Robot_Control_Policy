@@ -90,6 +90,10 @@ def load_policy(
       - EMA weights (used for inference)
       - Observation and action normalizers
 
+    Supports both obs_type="state" and obs_type="image" checkpoints.
+    For image checkpoints, obs_normalizer is returned as None (images are
+    normalized inside ResNetEncoder / the dataset).
+
     Args:
         checkpoint_path: Path to the ``*.pt`` checkpoint file.
         device:          Target device string.
@@ -101,10 +105,14 @@ def load_policy(
     cfg: TrainConfig = ckpt["config"]
     cfg.device = device
 
+    # Determine obs_dim fed to the UNet (0 for image mode — encoder is external)
+    obs_type = getattr(cfg.data, "obs_type", "state")
+    unet_obs_dim = 0 if obs_type == "image" else cfg.env.obs_dim
+
     model = ConditionalUnet1D(
         action_dim               = cfg.env.action_dim,
         obs_horizon              = cfg.data.obs_horizon,
-        obs_dim                  = cfg.env.obs_dim,
+        obs_dim                  = unet_obs_dim,
         diffusion_step_embed_dim = cfg.model.diffusion_step_embed_dim,
         down_dims                = cfg.model.down_dims,
         cond_dim                 = cfg.model.cond_dim,
@@ -119,15 +127,20 @@ def load_policy(
 
     model.eval()
 
-    obs_normalizer = MinMaxNormalizer()
-    obs_normalizer.load_state_dict(ckpt["obs_normalizer"])
+    # Observation normalizer: None for image mode (empty dict saved)
+    obs_norm_state = ckpt.get("obs_normalizer", {})
+    if obs_norm_state:
+        obs_normalizer = MinMaxNormalizer()
+        obs_normalizer.load_state_dict(obs_norm_state)
+    else:
+        obs_normalizer = None   # image mode — no state normalizer
 
     action_normalizer = MinMaxNormalizer()
     action_normalizer.load_state_dict(ckpt["action_normalizer"])
 
     logger.info(
-        "Loaded policy from %s | device=%s | method=%s",
-        checkpoint_path, device, cfg.method,
+        "Loaded policy from %s | device=%s | method=%s | obs_type=%s",
+        checkpoint_path, device, cfg.method, obs_type,
     )
     return model, obs_normalizer, action_normalizer, cfg
 
