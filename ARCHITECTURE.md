@@ -12,19 +12,28 @@
 pip install -r requirements.txt
 pip install gym-pusht           # PushT simulation environment
 
-# 2. Download the expert demonstration dataset
-python -c "
-import urllib.request, zipfile, pathlib
-url = 'https://diffusion-policy.cs.columbia.edu/data/training/pusht_cchi_v7_replay.zarr.zip'
-urllib.request.urlretrieve(url, 'pusht.zip')
-with zipfile.ZipFile('pusht.zip') as z: z.extractall('data/')
-"
+# 2. Download the expert demonstration dataset (Columbia, ~100 MB)
+wget https://diffusion-policy.cs.columbia.edu/data/training/pusht.zip
+unzip pusht.zip -d data/
+# → data/pusht_cchi_v7_replay.zarr  (206 episodes, 25,650 steps)
 
-# 3. Train the policy (full GPU training)
-python train.py
+# 3a. Train the policy — state observations (fast, ~14 hrs on MPS / ~2 hrs on GPU)
+python train.py \
+    --dataset_path data/pusht_cchi_v7_replay.zarr \
+    --num_epochs 100 --batch_size 256
+
+# 3b. Train with image observations (visuomotor, ResNet-18 encoder)
+python train.py \
+    --dataset_path data/pusht_cchi_v7_replay.zarr \
+    --obs_type image --num_epochs 100 --batch_size 64
+
+# 3c. Train with Flow Matching instead of DDPM
+python train.py \
+    --dataset_path data/pusht_cchi_v7_replay.zarr \
+    --method flow_matching --num_epochs 100 --batch_size 256
 
 # 4. Evaluate the trained policy
-python evaluate.py --checkpoint checkpoints/best.pt --sampler ddim
+python evaluate.py --checkpoint checkpoints/best.pt --sampler ddim --num_episodes 50
 
 # 5. Run unit tests
 pytest tests/ -v
@@ -61,7 +70,7 @@ Each denoising step makes the action sequence slightly less noisy and more like 
 ```
 Diffusion_Robot_Control_Policy/
 ├── config.py                          ← All hyperparameters (one place)
-├── train.py                           ← Training orchestration script
+├── train.py                           ← Training orchestration (state + image)
 ├── evaluate.py                        ← Evaluation / rollout script
 ├── visualize.py                       ← Plotting and GIF utilities
 ├── ARCHITECTURE.md                    ← This document
@@ -70,15 +79,17 @@ Diffusion_Robot_Control_Policy/
 ├── diffusion_policy/
 │   ├── data/
 │   │   ├── normalizer.py              ← MinMaxNormalizer: scale to [-1,1]
-│   │   └── dataset.py                 ← PushTStateDataset: Zarr + sliding window
+│   │   ├── dataset.py                 ← PushTStateDataset: Zarr + sliding window
+│   │   └── image_dataset.py           ← PushTImageDataset: RGB frames variant
 │   ├── env/
 │   │   └── pusht_env.py               ← PushTEnv: gymnasium wrapper
 │   └── model/
-│       ├── unet1d.py                  ← ConditionalUnet1D: the core network
+│       ├── unet1d.py                  ← ConditionalUnet1D: core network (state+image)
+│       ├── vision_encoder.py          ← ResNetEncoder: ResNet-18 visual backbone
 │       ├── ema.py                     ← EMA: weight averaging for stable inference
 │       ├── ddpm.py                    ← DDPMScheduler: noise schedule + sampling
 │       ├── ddim.py                    ← DDIMScheduler: fast 10-step inference
-│       └── flow_matching.py           ← FlowMatchingScheduler: Phase 5 extension
+│       └── flow_matching.py           ← FlowMatchingScheduler: FM extension
 │
 └── tests/
     ├── test_normalizer.py
@@ -87,6 +98,7 @@ Diffusion_Robot_Control_Policy/
     ├── test_ddim.py
     ├── test_ema.py
     ├── test_flow_matching.py
+    ├── test_vision_encoder.py         ← 15 tests for ResNetEncoder
     └── test_integration.py            ← End-to-end pipeline tests
 ```
 
@@ -106,16 +118,28 @@ The config is implemented as nested Python dataclasses.  The IDE provides auto-c
 #### Code Structure
 ```
 TrainConfig
-├── env:            EnvConfig       # obs_dim=5, action_dim=2
-├── data:           DataConfig      # horizons, dataset path, norm_range
-├── model:          ModelConfig     # down_dims, cond_dim, kernel_size
-├── diffusion:      DiffusionConfig # num_diffusion_steps, beta_start/end, DDIM params
-├── flow_matching:  FlowMatchingConfig  # Phase 5
-├── method:         str             # "ddpm" or "flow_matching"
-├── learning_rate:  float           # 1e-4
-├── batch_size:     int             # 256
-├── ema_decay:      float           # 0.995
-└── device:         str             # auto-detected: "cuda"/"mps"/"cpu"
+├── env:            EnvConfig            # obs_dim=5, action_dim=2
+├── data:           DataConfig           # horizons, dataset path, obs_type, norm_range
+│   └── obs_type: str                   #   "state" (default) or "image"
+├── model:          ModelConfig          # down_dims, cond_dim, kernel_size
+├── vision:         VisionEncoderConfig  # obs_cond_dim=256, pretrained, freeze_backbone
+├── diffusion:      DiffusionConfig      # num_diffusion_steps, beta_start/end, DDIM params
+├── flow_matching:  FlowMatchingConfig   # num_inference_steps
+├── method:         str                  # "ddpm" or "flow_matching"
+├── learning_rate:  float                # 1e-4
+├── batch_size:     int                  # 256 (state) / 64 (image)
+├── ema_decay:      float                # 0.995
+└── device:         str                  # auto-detected: "cuda"/"mps"/"cpu"
+```
+
+**`obs_type` selects the full observation pipeline:**
+- `"state"` → `PushTStateDataset` → 5-dim state vector → UNet obs MLP
+- `"image"` → `PushTImageDataset` → 96×96 RGB frames → `ResNetEncoder` → UNet image path
+
+**Constraint enforced by `__post_init__`:**
+```python
+if data.obs_type == "image":
+    assert vision.obs_cond_dim == model.cond_dim  # both must be 256
 ```
 
 #### Key Insight — The Three Horizons
@@ -245,6 +269,130 @@ obs_arr   = PushTEnv.deque_to_array(obs_deque)  # (2, 5) ready for normalizer
 
 ---
 
+### `diffusion_policy/data/image_dataset.py` — PushTImageDataset
+
+#### Intuitive Explanation
+The image-observation variant of the dataset loads the raw RGB video frames stored in the PushT zarr file (`data/img`) alongside actions.  Instead of returning a 5-dim state vector per timestep, it returns a `(T_obs, 3, H, W)` tensor of normalised RGB frames.
+
+Using images as observations moves the policy much closer to what a real robot would see from a camera — no privileged state information, just pixels.  This is the **visuomotor** setting of Chi et al. (RSS 2023), where success rates of ~95% coverage were reported with a pretrained ResNet encoder.
+
+#### Code Walkthrough
+```python
+dataset = PushTImageDataset(
+    dataset_path="data/pusht_cchi_v7_replay.zarr",
+    obs_horizon=2,      # T_obs  — number of frames per sample
+    pred_horizon=16,    # T_pred — future action chunk length
+)
+
+sample = dataset[0]
+# sample["obs"]    → (2, 3, 96, 96)  float32, range [0, 1]
+# sample["action"] → (16, 2)         float32, range [-1, 1]
+```
+
+**Zarr structure used:**
+```
+root.zarr/
+├── data/img      (N_total, 96, 96, 3)  uint8/float32 [0, 255]
+├── data/action   (N_total, 2)
+└── meta/episode_ends (num_eps,)
+```
+
+**Preprocessing pipeline:**
+1. Load `data/img` as float32, divide by 255 → `[0, 1]`
+2. Transpose `(N, H, W, C) → (N, C, H, W)` (PyTorch channel-first convention)
+3. Same sliding-window + boundary padding logic as `PushTStateDataset`
+4. Actions are min-max normalised to `[-1, 1]` exactly as in the state variant
+
+The `get_action_normalizer()` method returns the fitted `MinMaxNormalizer` so `train.py` and `evaluate.py` can unnormalize predictions at inference time.
+
+#### Why No Image Normalizer?
+Image pixels in `[0, 1]` are already in a safe range for neural networks.  When `pretrained=True`, the `ResNetEncoder` applies ImageNet mean/std normalisation internally.  Storing a separate `MinMaxNormalizer` for images would add complexity with no benefit.
+
+---
+
+### `diffusion_policy/model/vision_encoder.py` — ResNetEncoder
+
+#### Intuitive Explanation
+The `ResNetEncoder` is the "eyes" of the visuomotor policy.  It takes T_obs consecutive RGB frames, extracts a rich visual feature from each, concatenates them, and projects everything down to a single conditioning vector of size `obs_cond_dim=256`.
+
+This conditioning vector plays exactly the same role as the normalised state vector in the state-based policy: it tells the UNet "what the robot currently sees" so the UNet can generate appropriate actions.
+
+Think of it like this: the ResNet-18 backbone is a pretrained image-understanding engine (trained on ImageNet to recognise 1000 categories).  We strip its final classification head and repurpose its 512-dimensional feature as a rich spatial representation of each frame.  Two frames concatenated → 1024 dimensions.  A small projection MLP then compresses this to 256, matching the UNet's conditioning dimension.
+
+#### Code Walkthrough — Architecture
+```python
+encoder = ResNetEncoder(
+    obs_horizon=2,        # T_obs — how many frames to process
+    obs_cond_dim=256,     # output conditioning vector size
+    pretrained=False,     # True → ImageNet weights (better for real images)
+    freeze_backbone=False # True → only train the projection MLP
+)
+
+obs_imgs = torch.randn(B, 2, 3, 96, 96)   # (batch, T_obs, C, H, W)
+cond     = encoder(obs_imgs)               # (B, 256) — conditioning vector
+```
+
+**Internal data flow:**
+```
+obs_imgs: (B, T_obs, 3, 96, 96)
+    │
+    ▼  reshape to process all frames at once
+(B·T_obs, 3, 96, 96)
+    │
+    ▼  ResNet-18 backbone (conv1→bn1→relu→maxpool→layer1→layer2→layer3→layer4)
+(B·T_obs, 512, 3, 3)     ← spatial feature map for each frame
+    │
+    ▼  AdaptiveAvgPool2d(1)  — global average pooling
+(B·T_obs, 512, 1, 1)
+    │
+    ▼  flatten
+(B·T_obs, 512)
+    │
+    ▼  reshape to concatenate time dimension
+(B, T_obs × 512) = (B, 1024)    ← all frames' features concatenated
+    │
+    ▼  projection MLP: Linear(1024→256) → ReLU → Linear(256→256)
+(B, 256)    ← final conditioning vector
+```
+
+**Key design choices:**
+- **No final avgpool/fc from torchvision** — ResNet-18's default head is stripped; the `AdaptiveAvgPool2d(1)` is added explicitly.  This allows any input resolution (96×96, 128×128, etc.) without resizing.
+- **Concatenation over time** — frames are concatenated in feature space rather than averaged, preserving temporal information (frame 0 ≠ frame 1 in the conditioning vector).
+- **Shared backbone across frames** — the same ResNet weights process each frame; implicit weight sharing encourages consistent feature extraction regardless of temporal position.
+
+#### Mathematical Foundation
+
+**ResNet-18 residual block:**
+```
+y = F(x, {W_i}) + x
+
+where F(x) = BN(W₂ · ReLU(BN(W₁ · x)))
+```
+
+The `+x` skip connection ensures gradients flow directly back to early layers, enabling training of very deep networks.
+
+**Global average pooling:**
+```
+For feature map x ∈ ℝ^{C × H × W}:
+    GAP(x)_c = (1/H·W) · Σ_{h,w} x[c, h, w]
+```
+
+This collapses spatial information to a single vector while being invariant to input resolution.
+
+**Projection MLP:**
+```
+cond = W₂ · ReLU(W₁ · concat(GAP(frame₁), ..., GAP(frame_{T_obs})))
+```
+
+**ImageNet normalisation (when `pretrained=True`):**
+```
+x_norm = (x − μ_ImageNet) / σ_ImageNet
+μ_ImageNet = [0.485, 0.456, 0.406]
+σ_ImageNet = [0.229, 0.224, 0.225]
+```
+
+---
+
 ### `diffusion_policy/model/unet1d.py` — ConditionalUnet1D
 
 #### Intuitive Explanation
@@ -254,6 +402,26 @@ Think of the 16-step action trajectory as a short 1D audio clip with 2 channels 
 
 **FiLM conditioning** is the clever trick that makes this work: instead of simply appending the conditioning information to the input (which the first layer would then have to "decode"), FiLM injects it at **every residual block** by multiplicatively modulating the features.
 
+#### Code Walkthrough — Dual Observation Paths
+
+The UNet supports two observation modes, selected by `obs_dim`:
+- **State mode** (`obs_dim=5`): raw state vector → internal MLP → conditioning
+- **Image mode** (`obs_dim=0`): pre-encoded vector from `ResNetEncoder` passed directly
+
+```python
+# State mode (obs_dim > 0):
+model = ConditionalUnet1D(action_dim=2, obs_dim=5, obs_horizon=2, cond_dim=256)
+obs_state = torch.randn(B, 2, 5)     # (B, T_obs, obs_dim)
+out = model(noisy_actions, timesteps, obs_state)
+
+# Image mode (obs_dim = 0):
+model = ConditionalUnet1D(action_dim=2, obs_dim=0, obs_horizon=2, cond_dim=256)
+obs_cond  = encoder(obs_imgs)         # (B, 256) — from ResNetEncoder
+out = model(noisy_actions, timesteps, obs_cond)
+```
+
+When `obs_dim=0`, the `obs_encoder` MLP is bypassed — the external conditioning vector is used directly.  This avoids a pointless `Linear(256 → 256)` bottleneck and cleanly separates concerns between the visual backbone and the temporal denoiser.
+
 #### Code Walkthrough — Data Flow
 
 ```
@@ -261,10 +429,15 @@ Input: noisy_actions (B, 16, 2)
          │
          ▼ permute to (B, 2, 16) for Conv1d
 
-Condition encoding:
+Condition encoding (STATE mode, obs_dim=5):
   obs (B, 2, 5) → flatten → (B, 10) → MLP → obs_emb (B, 256)
   timestep (B,) → SinusoidalPosEmb → MLP → t_emb (B, 256)
   cond = cat([t_emb, obs_emb]) → (B, 512)
+
+Condition encoding (IMAGE mode, obs_dim=0):
+  obs_cond already (B, 256) from ResNetEncoder
+  timestep (B,) → SinusoidalPosEmb → MLP → t_emb (B, 256)
+  cond = cat([t_emb, obs_cond]) → (B, 512)
 
 Encoder (skip connections saved before downsampling):
   Level 0: ResBlock(2→256) + ResBlock(256→256)     T=16 → skip0
@@ -586,12 +759,38 @@ The training script is the conductor: it builds all the components (dataset, mod
 - Cosine-warmup LR schedule → stable start + fine-grained end
 - EMA updated after every step → smooth inference weights throughout training
 
+#### Code Walkthrough — Dataset and Model Selection
+
+`train.py` selects the full pipeline based on `cfg.data.obs_type`:
+
+```python
+if cfg.data.obs_type == "image":
+    dataset           = PushTImageDataset(dataset_path, obs_horizon, pred_horizon)
+    obs_normalizer    = None                          # images need no state normalizer
+    action_normalizer = dataset.get_action_normalizer()
+    vision_encoder    = ResNetEncoder(obs_horizon, obs_cond_dim, pretrained, freeze_backbone)
+    unet_obs_dim      = 0                             # UNet bypasses internal MLP
+else:
+    dataset           = PushTStateDataset(dataset_path, obs_horizon, pred_horizon)
+    obs_normalizer, action_normalizer = dataset.get_normalizers()
+    vision_encoder    = None
+    unet_obs_dim      = cfg.env.obs_dim               # UNet uses internal MLP
+```
+
+When `obs_type == "image"`, the vision encoder is updated by EMA separately from the UNet, and both are saved in the checkpoint.
+
 #### Code Walkthrough — Training Loop
 
 ```python
 for epoch in range(num_epochs):
     for batch in dataloader:
-        obs, action = batch["obs"], batch["action"]
+        obs_raw, action = batch["obs"], batch["action"]
+
+        # ── Encode observations ──────────────────────────────────────────
+        if vision_encoder is not None:
+            obs = vision_encoder(obs_raw)     # (B, T_obs, C, H, W) → (B, cond_dim)
+        else:
+            obs = obs_raw                     # (B, T_obs, obs_dim) — state
 
         # ── DDPM path ──
         k          = scheduler.sample_timesteps(B)        # random k
@@ -602,10 +801,12 @@ for epoch in range(num_epochs):
 
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        nn.utils.clip_grad_norm_(all_params, 1.0)
         optimizer.step()
         lr_scheduler.step()
         ema.update(model)
+        if vision_encoder is not None:
+            ema_encoder.update(vision_encoder)
 ```
 
 #### Mathematical Foundation — LR Schedule
@@ -668,14 +869,25 @@ success = max_coverage_in_episode ≥ 0.9
 
 The reported **success rate** is the fraction of successful episodes over 50 evaluation rollouts.
 
+**Image mode:** when `cfg.data.obs_type == "image"`, `load_policy()` recreates the `ResNetEncoder` from the checkpoint, loads its EMA weights, and uses it to encode each frame in the evaluation loop:
+
+```python
+obs_deque: deque  # holds (T_obs, 3, 96, 96) frames
+frames_tensor = torch.stack(list(obs_deque)).unsqueeze(0)  # (1, T_obs, 3, H, W)
+obs_cond = vision_encoder(frames_tensor)                    # (1, 256)
+# obs_cond passed directly to model (obs_dim=0 path)
+```
+
 **Reference numbers (from Chi et al., RSS 2023):**
 
-| Method | Success Rate | Steps |
-|--------|-------------|-------|
-| Implicit BC (IBC) | ~0.66 | — |
-| Explicit BC (LSTM-GMM) | ~0.61 | — |
-| **Diffusion Policy (DDPM)** | **~0.92** | 100 |
-| **Diffusion Policy (DDIM)** | **~0.90** | 10 |
+| Method | Observations | Success Rate | Inference Steps |
+|--------|-------------|-------------|-----------------|
+| Implicit BC (IBC) | State | ~0.66 | — |
+| Explicit BC (LSTM-GMM) | State | ~0.61 | — |
+| **Diffusion Policy (DDPM)** | **State** | **~0.92** | 100 |
+| **Diffusion Policy (DDIM)** | **State** | **~0.90** | 10 |
+| **Diffusion Policy (DDPM)** | **Image (ResNet-18)** | **~0.96** | 100 |
+| **Diffusion Policy (DDIM)** | **Image (ResNet-18)** | **~0.95** | 10 |
 
 ---
 
@@ -700,6 +912,7 @@ Good visualizations are essential for debugging, understanding, and presenting M
 
 | Variable | Values to try | Expected effect |
 |----------|--------------|-----------------|
+| `obs_type` | `"state"` vs `"image"` | Image → higher ceiling, slower training |
 | `pred_horizon` (T_pred) | 8, 16, 32 | Longer → smoother but harder to train |
 | `action_horizon` (T_action) | 1, 4, 8, 16 | Longer → more committed, less reactive |
 | `obs_horizon` (T_obs) | 1, 2, 4 | More → implicit velocity signal |
@@ -707,6 +920,7 @@ Good visualizations are essential for debugging, understanding, and presenting M
 | EMA decay | 0.99, 0.995, 0.999 | Higher → smoother but slower to adapt |
 | Down dims | (256,512) vs (256,512,1024) | Larger → more capacity, slower |
 | Method | ddpm vs flow_matching | FM tends to need fewer inference steps |
+| `freeze_backbone` | True vs False | Frozen → faster training, less overfit risk |
 
 ### How to Read Results
 
@@ -736,3 +950,6 @@ Good visualizations are essential for debugging, understanding, and presenting M
 
 6. Florence et al., **"Implicit Behavioral Cloning"**, CoRL 2021.
    — Original PushT environment; provides baseline comparisons.
+
+7. He et al., **"Deep Residual Learning for Image Recognition"**, CVPR 2016.
+   — ResNet architecture; our visual backbone (`ResNet-18`).
