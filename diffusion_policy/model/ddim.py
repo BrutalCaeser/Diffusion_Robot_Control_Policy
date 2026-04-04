@@ -157,9 +157,14 @@ class DDIMScheduler:
 
         # ── Predict clean action â_0 ──────────────────────────────────────
         # â_0 = (a_t - √(1-ᾱ_t) · ε_θ) / √ᾱ_t
+        # Clamp denominator to avoid division by ~0 at the final noisy step
+        # (ᾱ_K → 0 under cosine schedule).  Also clamp â_0 to [-1, 1] since
+        # actions are trained in that normalised range — this is standard
+        # practice in all DDIM implementations (Chi et al. 2023, HF diffusers).
         a0_pred = (
             noisy_actions - (1.0 - ab_t).sqrt() * model_output
-        ) / ab_t.sqrt()
+        ) / ab_t.sqrt().clamp(min=1e-3)
+        a0_pred = a0_pred.clamp(-1.0, 1.0)
 
         # ── Compute σ (stochasticity) ─────────────────────────────────────
         # σ_k = η · √((1-ᾱ_{k-1})/(1-ᾱ_k)) · √(1 - ᾱ_k / ᾱ_{k-1})
