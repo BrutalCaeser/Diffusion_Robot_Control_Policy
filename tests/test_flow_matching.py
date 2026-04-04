@@ -84,7 +84,8 @@ class TestComputeTarget:
         t0 = torch.full((1,), 0.5)
         t1 = torch.full((1,), 0.5 + dt)
         numerical_vel = (fm.interpolate(a0, noise, t1) - fm.interpolate(a0, noise, t0)) / dt
-        torch.testing.assert_close(numerical_vel, target, atol=1e-3, rtol=0)
+        # float32 finite-difference at dt=1e-4 accumulates ~1.4e-3 rounding error
+        torch.testing.assert_close(numerical_vel, target, atol=2e-3, rtol=0)
 
 
 class TestGetLoss:
