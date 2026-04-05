@@ -235,7 +235,9 @@ def plot_training_curves(
         axes[1].set_title("Evaluation Performance"); axes[1].legend()
 
     plt.tight_layout()
-    _save(fig, Path(save_dir) / "training_curves.png")
+    # Derive filename from the CSV stem so DDPM and FM don't overwrite each other
+    stem = Path(csv_path).stem.replace("_metrics", "")
+    _save(fig, Path(save_dir) / f"{stem}_curves.png")
 
 
 def _safe_float(v: str) -> float | None:
