@@ -15,7 +15,7 @@ This project implements **Diffusion Policy** — a generative-model-based approa
   - DDIM sampling (10 steps, 10x faster)
   - Flow Matching (stretch goal, continuous-time ODE approach)
 - **Environment**: PushT — a 2D pushing task where an agent pushes a T-block to match a target pose
-- **Target Performance**: 70-90%+ success rate
+- **Achieved Performance**: 96% success rate (DDIM, 50 episodes)
 
 ### Why Diffusion Policy?
 
@@ -171,7 +171,7 @@ For each batch:
 
 **Key hyperparameters:**
 - Diffusion steps: K = 100
-- Noise schedule: β ∈ [1e-4, 0.02] (linear)
+- Noise schedule: cosine (K=100)
 - Optimizer: AdamW (lr=1e-4, weight_decay=1e-6)
 - LR schedule: Cosine annealing + 500-step warmup
 - Batch size: 256
@@ -297,7 +297,7 @@ model = model.to(device)
 - **Inference Speed**: Wall-clock time per action generation (DDPM vs. DDIM)
 - **Rollout Quality**: Visual inspection of GIFs (agent pushes coherently, reaches target)
 
-**Target Performance**: 70-90%+ success rate on PushT with DDIM sampling (10 steps).
+**Achieved Performance**: 96% success rate on PushT with DDIM sampling (10 steps); 96% with Flow Matching; 90% with DDPM (100 steps). All results meet or exceed Chi et al. (RSS 2023) reported numbers.
 
 ---
 
@@ -449,15 +449,9 @@ If using this implementation in research:
 
 ---
 
-## Future Work (Post-Deadline)
+## Future Work
 
-### Flow Matching Extension (Phase 5)
-- Replace discrete diffusion with continuous-time ODE
-- Train velocity field instead of predicting noise
-- Use Euler/RK4 ODE integration for faster inference
-- Compare DDPM vs. Flow Matching performance
-
-### Schrödinger Bridge Research (Thesis)
+### Schrödinger Bridge Research
 - Add diffusion coefficient σ(t) to FM ODE
 - Estimate SB solutions using forward-backward SDE formulation
 - Connect to optimal transport theory
@@ -469,11 +463,10 @@ If using this implementation in research:
 
 For questions or issues, refer to:
 - **Project Report**: [PROJECT_REPORT.md](PROJECT_REPORT.md)
-- **Agent Prompt**: [diffusion_policy_agent_prompt.md](diffusion_policy_agent_prompt.md)
 - **Timeline**: [TIMELINE.md](TIMELINE.md)
 - **Code**: Individual module docstrings in `diffusion_policy/`
 
 ---
 
-**Last Updated**: March 2026  
-**Status**: In Development (Phase 2 → Phase 4)
+**Last Updated**: April 2026
+**Status**: Complete — 101 tests passing, 100-epoch training runs finished for both DDPM and Flow Matching, full evaluation done.
