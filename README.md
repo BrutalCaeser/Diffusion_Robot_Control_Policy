@@ -1,472 +1,199 @@
 # Diffusion Policy for Simulated Robot Control
 
-**A Machine Learning Implementation of Action Diffusion for Robot Control in the PushT Environment**
+**ML 6140 — Machine Learning | Northeastern University | April 2026**
 
-## Project Overview
-
-This project implements **Diffusion Policy** — a generative-model-based approach to robot control — as proposed by Chi et al. (RSS 2023). Rather than training a standard behavioral cloning policy that maps observations to a single deterministic action, we train a **Denoising Diffusion Probabilistic Model (DDPM)** that iteratively denoises action sequences conditioned on observations.
-
-### Key Features
-
-- **Core Architecture**: Conditional 1D Temporal U-Net with FiLM conditioning
-- **Training Method**: DDPM with EMA weight averaging
-- **Inference Methods**: 
-  - DDPM sampling (100 steps, baseline)
-  - DDIM sampling (10 steps, 10x faster)
-  - Flow Matching (stretch goal, continuous-time ODE approach)
-- **Environment**: PushT — a 2D pushing task where an agent pushes a T-block to match a target pose
-- **Achieved Performance**: 96% success rate (DDIM, 50 episodes)
-
-### Why Diffusion Policy?
-
-Traditional behavioral cloning suffers from **multimodal action distribution** collapse — when multiple valid actions exist for the same observation, regression-based policies average over modes rather than committing to one. Diffusion models naturally represent multimodal distributions, enabling the policy to capture the full diversity of expert behavior without mode collapse.
+Team: Yashvardhan Gupta · Vineeth Sakhamuru · Sai Krishna Reddy Maligireddy
 
 ---
 
-## Team
+## What this is
 
-| Name | Email |
-|------|-------|
-| Yashvardhan Gupta | gupta.yashv@northeastern.edu |
-| Vineeth Sakhamuru | sakhamuru.v@northeastern.edu |
-| Sai Krishna Reddy Maligireddy | maligireddy.s@northeastern.edu |
+A from-scratch implementation of **Diffusion Policy** (Chi et al., RSS 2023) applied to the PushT task — a 2D robot manipulation benchmark where an agent must push a T-shaped block to a target pose.
 
-**Course**: ML 6140 — Machine Learning  
-**Deadline**: April 15, 2026
+We implement three action generation methods:
+- **DDPM** — 100-step stochastic denoising (baseline)
+- **DDIM** — 10-step deterministic sampling (10× faster, equal accuracy)
+- **Flow Matching** — straight-line ODE interpolation (alternative formulation)
+- **BC baseline** — 2-layer MLP regression (proves why diffusion is needed)
+
+All models are trained on 300 epochs (BC: 200 epochs) on NVIDIA A100 GPUs via the Northeastern Explorer HPC cluster.
+
+---
+
+## Results
+
+| Method | Success Rate | Inference Time | Steps |
+|--------|-------------|----------------|-------|
+| DDIM (ours) | **96%** | 17 ms | 10 |
+| Flow Matching (ours) | **96%** | 59 ms | 10 |
+| DDPM (ours) | **90%** | 161 ms | 100 |
+| BC baseline (ours) | ~40–55% | <1 ms | — |
+| DDIM (Chi et al., 2023) | ~90% | — | 10 |
+
+The BC baseline's low success rate is the point: averaging over multi-modal expert actions produces stuck behavior. Diffusion commits to one mode at a time.
+
+---
+
+## Repository Structure
+
+```
+.
+├── config.py                  # All hyperparameters in one place
+├── train.py                   # DDPM / Flow Matching training
+├── train_bc.py                # BC baseline training
+├── evaluate.py                # Receding-horizon evaluation (DDPM/DDIM/FM)
+├── evaluate_bc.py             # BC baseline evaluation
+├── ablation.py                # DDIM steps sweep [1,5,10,20,50,100]
+├── visualize.py               # Plots: loss curves, GIFs, multimodal motivation
+├── run_ablation.sh            # Local 6-phase orchestration script
+├── requirements.txt
+├── ARCHITECTURE.md            # Deep technical reference
+├── PROJECT_REPORT.md          # Full report with math, results, challenges
+│
+├── baselines/
+│   └── bc_policy.py           # 2-hidden-layer MLP (135K params)
+│
+├── diffusion_policy/
+│   ├── model/
+│   │   ├── unet1d.py          # ConditionalUnet1D — 68.95M params, FiLM conditioning
+│   │   ├── ddpm.py            # Cosine noise schedule, forward/reverse process
+│   │   ├── ddim.py            # Deterministic skip-step sampler
+│   │   ├── ema.py             # Exponential Moving Average (decay=0.995)
+│   │   ├── flow_matching.py   # Straight-line interpolation, Euler ODE
+│   │   └── vision_encoder.py  # ResNet-18 for image observations (unused in state training)
+│   ├── data/
+│   │   ├── dataset.py         # Zarr loading + sliding-window sampling
+│   │   ├── normalizer.py      # MinMaxNormalizer: fit/normalize/unnormalize
+│   │   └── image_dataset.py   # Image dataset (visuomotor extension)
+│   └── env/
+│       └── pusht_env.py       # Gymnasium PushT wrapper
+│
+├── hpc/                       # Northeastern Explorer SLURM scripts
+│   ├── setup_env.sh           # Create isolated `diffpol` conda env via SLURM
+│   ├── train_ddpm.sh          # 300-epoch DDPM job (A100, 8h)
+│   ├── train_fm.sh            # 300-epoch FM job (A100, 8h)
+│   ├── train_bc.sh            # 200-epoch BC job (A100, 1h)
+│   ├── ablation_steps.sh      # DDIM steps ablation job
+│   ├── watch_and_submit_ablation.sh  # Auto-submits ablation after DDPM finishes
+│   └── README.md              # HPC setup, submission order, monitoring
+│
+└── tests/                     # 120 unit tests — all passing on Explorer
+    ├── test_bc_policy.py      # 19 tests
+    ├── test_ddpm.py           # 11 tests
+    ├── test_ddim.py           # 8 tests
+    ├── test_flow_matching.py  # 7 tests
+    ├── test_unet1d.py         # 20 tests
+    ├── test_ema.py            # 10 tests
+    ├── test_normalizer.py     # 14 tests
+    ├── test_integration.py    # 8 tests
+    └── test_vision_encoder.py # 23 tests
+```
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.9+
-- PyTorch 2.0+
-- macOS (CPU/MPS) or Linux (CUDA GPU)
-
-### Installation
+### Install
 
 ```bash
-# Clone the repository
-git clone <repo_url>
-cd Diffusion_Robot_Control_Policy
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Verify setup
-python config.py
 ```
 
-This will print configuration parameters and verify the device is detected correctly (cpu, mps, or cuda).
+Key dependencies: `torch>=2.0`, `zarr>=2.14,<4`, `gym_pusht`, `pymunk>=6.4,<7`, `imageio`, `matplotlib`
 
-### Local Development (MacBook)
+### Download Dataset
 
 ```bash
-# Test data pipeline (5 min on CPU)
-python -c "from diffusion_policy.data.dataset import PushTStateDataset; print('Dataset import OK')"
-
-# Single-batch overfit sanity check (< 1 min on CPU)
-python train.py --batch_size 1 --num_epochs 1 --device cpu
+mkdir -p data
+wget https://diffusion-policy.cs.columbia.edu/data/training/pusht.zip
+unzip pusht.zip -d data/
+# → data/pusht_cchi_v7_replay.zarr  (206 episodes, 25,650 steps)
 ```
 
-### Remote Training (Google Colab / University GPU)
+### Train
 
 ```bash
-# In Colab notebook:
-!git clone <repo_url>
-%cd Diffusion_Robot_Control_Policy
-!pip install -r requirements.txt
+# DDPM (300 epochs):
+python train.py --method ddpm --num_epochs 300 --batch_size 256 \
+    --dataset_path data/pusht_cchi_v7_replay.zarr \
+    --checkpoint_dir checkpoints/ddpm_300ep --log_dir logs/ddpm_300ep
 
-# Full GPU training (2-4 hours)
-!python train.py --batch_size 256 --num_epochs 300
+# Flow Matching (300 epochs):
+python train.py --method flow_matching --num_epochs 300 --batch_size 256 \
+    --dataset_path data/pusht_cchi_v7_replay.zarr \
+    --checkpoint_dir checkpoints/fm_300ep --log_dir logs/fm_300ep
+
+# BC baseline (200 epochs):
+python train_bc.py --num_epochs 200 --batch_size 256 \
+    --dataset_path data/pusht_cchi_v7_replay.zarr
 ```
 
-### Evaluation
+### Evaluate
 
 ```bash
-# Evaluate trained model with DDIM (10 steps)
-python evaluate.py --checkpoint checkpoints/best.pt --sampler ddim --num_episodes 100
+# DDIM (recommended — fast and accurate):
+python evaluate.py --checkpoint checkpoints/ddpm_300ep/best.pt --sampler ddim --num_episodes 50
 
-# Generate rollout GIFs
-python evaluate.py --checkpoint checkpoints/best.pt --sampler ddim --save_gifs
+# Flow Matching:
+python evaluate.py --checkpoint checkpoints/fm_300ep/best.pt --sampler flow --num_episodes 50
+
+# BC baseline:
+python evaluate_bc.py --checkpoint checkpoints/bc/best.pt --num_episodes 50
 ```
 
----
-
-## Project Structure
-
-```
-diffusion_policy/
-├── __init__.py
-├── model/
-│   ├── __init__.py
-│   ├── unet1d.py              # Conditional 1D Temporal U-Net
-│   ├── ddpm.py                # DDPM noise schedule & reverse sampling
-│   ├── ddim.py                # DDIM accelerated sampling
-│   ├── flow_matching.py        # Flow Matching (Phase 5 extension)
-│   └── ema.py                 # Exponential Moving Average
-├── data/
-│   ├── __init__.py
-│   ├── dataset.py             # PushT dataset with sliding window
-│   └── normalizer.py          # Min-max normalization [-1, 1]
-├── env/
-│   ├── __init__.py
-│   └── pusht_env.py           # PushT environment wrapper
-├── train.py                   # Main training script
-├── evaluate.py                # Evaluation & rollout script
-├── visualize.py               # Visualization utilities
-├── config.py                  # Centralized hyperparameter config
-├── requirements.txt           # Python dependencies
-├── PROJECT_REPORT.md          # Full project report with objectives
-└── README.md                  # This file
-```
-
----
-
-## Technical Specification
-
-### Model Architecture
-
-**Conditional 1D Temporal U-Net**
-
-The core model processes action sequences (T_pred, action_dim) along the temporal dimension using 1D convolutions.
-
-| Component | Details |
-|-----------|---------|
-| Input channels | 2 (x, y velocity for PushT) |
-| Channel progression | [256, 512, 1024] (3 U-Net levels) |
-| Timestep embedding | 256-dim sinusoidal + 2-layer MLP |
-| Observation conditioning | FiLM (Feature-wise Linear Modulation) |
-| Residual blocks | Conv1d → GroupNorm → FiLM → Mish → Conv1d |
-
-### Data Pipeline
-
-1. **Sliding window extraction**: For each timestep in each episode:
-   - Observation: last T_obs=2 frames → shape (2, 5)
-   - Action: next T_pred=16 frames → shape (16, 2)
-   
-2. **Normalization**: Min-max to [-1, 1] using dataset statistics
-   
-3. **Padding**: Repeat first/last observation/action at episode boundaries
-
-Expected data shapes:
-```
-obs:    (B, T_obs, obs_dim)   = (B, 2, 5)
-action: (B, T_pred, action_dim) = (B, 16, 2)
-```
-
-### DDPM Training
-
-Standard diffusion objective with linear noise schedule:
-
-```
-For each batch:
-  1. Sample timestep k ~ Uniform{0, ..., K-1}
-  2. Sample noise ε ~ N(0, I)
-  3. Compute noisy actions: a_k = √(ᾱ_k) · a_0 + √(1 - ᾱ_k) · ε
-  4. Predict noise: ε_θ = model(a_k, k, obs)
-  5. Loss = MSE(ε_θ, ε)
-```
-
-**Key hyperparameters:**
-- Diffusion steps: K = 100
-- Noise schedule: cosine (K=100)
-- Optimizer: AdamW (lr=1e-4, weight_decay=1e-6)
-- LR schedule: Cosine annealing + 500-step warmup
-- Batch size: 256
-- EMA decay: 0.995
-- Training epochs: 300-500
-
-### DDPM & DDIM Inference
-
-**DDPM Sampling** (100 steps):
-```
-1. Initialize: a_K ~ N(0, I)
-2. For k = K-1, ..., 0:
-     Predict noise: ε_θ = model(a_k, k, obs)
-     Denoise: a_{k-1} = (1/√α_k)(a_k - (β_k/√(1-ᾱ_k)) · ε_θ) + σ_k · z
-3. Execute first T_action=8 steps
-4. Re-plan with updated observations
-```
-
-**DDIM Sampling** (10 steps, 10x faster):
-```
-1. Select timestep subsequence: [99, 89, 79, ..., 9, 0]
-2. For each pair of timesteps:
-     Compute predicted clean action: â_0 = (a_k - √(1-ᾱ_k) · ε_θ) / √(ᾱ_k)
-     Deterministic step: a_{k'} = √(ᾱ_{k'}) · â_0 + √(1-ᾱ_{k'}) · ε_θ
-3. Same receding-horizon execution
-```
-
----
-
-## Implementation Timeline
-
-### Phase 1: Data Pipeline (Week 1)
-- ✓ Set up environment and dependencies
-- ✓ Implement data loading and normalization
-- ✓ Verify data shapes and distributions
-
-### Phase 2: Model Architecture (Week 2)
-- Implement timestep embedding, FiLM conditioning
-- Implement 1D residual blocks and full U-Net
-- Local CPU sanity checks (gradient flow, shape verification)
-
-### Phase 3: Training & Inference (Weeks 3-4)
-- Implement DDPM forward/reverse process
-- Implement EMA weight averaging
-- Full training loop on GPU with loss logging
-- DDPM and DDIM sampling
-- Receding-horizon evaluation
-
-### Phase 4: Ablations & Report (Weeks 5-9)
-- **Prediction horizon**: {4, 8, 16, 32}
-- **DDIM steps**: {5, 10, 20, 50} + timing
-- **Observation horizon**: {1, 2, 4}
-- **EMA vs. no EMA**
-- **Diffusion Policy vs. MLP baseline**
-- Write full technical report with figures
-
-### Phase 5: Flow Matching (Post-deadline, optional)
-- Implement continuous-time ODE formulation
-- Velocity field prediction instead of noise
-- Euler/RK4 ODE integration for inference
-- Compare with DDPM: convergence, inference speed, success rate
-- Bridge toward Schrödinger Bridge research
-
----
-
-## Development Workflow
-
-### Local (MacBook) — Code Development
+### DDIM Steps Ablation
 
 ```bash
-# Develop with CPU/MPS
-python config.py  # verify device is detected
-
-# Test individual components
-python -m pytest tests/  # (if test suite exists)
-
-# Single-batch overfit sanity check
-python train.py --batch_size 1 --num_epochs 1 --device cpu
-
-# Visualize data
-python -c "from diffusion_policy.data.dataset import PushTStateDataset; ..."
+python ablation.py --checkpoint checkpoints/ddpm_300ep/best.pt \
+    --steps 1 5 10 20 50 100 --num_episodes 30
+# → logs/ablation/steps_ablation.json, plots/steps_ablation.png
 ```
 
-### Remote (Google Colab/University GPU) — Full Training
+### Run All Tests
 
 ```bash
-# 1. Push to GitHub
-git add .
-git commit -m "Implement DDPM training"
-git push origin main
-
-# 2. In Colab, clone and run
-!git clone https://github.com/<your-repo>
-!pip install -r requirements.txt
-!python train.py  # runs on GPU
-
-# 3. Download checkpoints back to MacBook
-from google.colab import files
-files.download('checkpoints/best.pt')
-```
-
-### Device-Agnostic Code
-
-All code uses this pattern to work on any device:
-
-```python
-import torch
-
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else
-    "mps" if torch.backends.mps.is_available() else
-    "cpu"
-)
-model = model.to(device)
+pytest tests/ -v
+# Expected: 120 passed
 ```
 
 ---
 
-## Evaluation Metrics
-
-- **Success Rate**: % of episodes where T-block reaches target pose (within distance/angle threshold)
-- **Average Reward**: Continuous overlap score from PushT environment
-- **Inference Speed**: Wall-clock time per action generation (DDPM vs. DDIM)
-- **Rollout Quality**: Visual inspection of GIFs (agent pushes coherently, reaches target)
-
-**Achieved Performance**: 96% success rate on PushT with DDIM sampling (10 steps); 96% with Flow Matching; 90% with DDPM (100 steps). All results meet or exceed Chi et al. (RSS 2023) reported numbers.
-
----
-
-## Key Papers & References
-
-1. **Diffusion Policy** — Chi et al., "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion" (RSS 2023)
-   - Primary reference implementation target
-
-2. **DDPM** — Ho et al., "Denoising Diffusion Probabilistic Models" (NeurIPS 2020)
-   - Foundational noise schedule and training objective
-
-3. **DDIM** — Song et al., "Denoising Diffusion Implicit Models" (ICLR 2021)
-   - Accelerated deterministic sampling
-
-4. **Flow Matching** — Lipman et al., "Flow Matching for Generative Modeling" (ICLR 2023)
-   - Continuous-time alternative to DDPM (Phase 5)
-
-5. **Rectified Flows** — Liu et al., "Flow Straight and Fast" (ICLR 2023)
-   - Straight-line interpolation for faster ODE solving
-
-### Code References
-
-- **Official Diffusion Policy**: https://github.com/real-stanford/diffusion_policy
-- **LeRobot (HuggingFace)**: https://github.com/huggingface/lerobot
-- **HuggingFace Diffusers**: https://github.com/huggingface/diffusers
-
----
-
-## Repository Setup & Git Workflow
-
-### Initial Setup
+## HPC Training (Northeastern Explorer)
 
 ```bash
-# Initialize git (if not already done)
-git init
-git add -A
-git commit -m "Initial commit: project structure, config, and documentation"
+# 1. Set up environment (run once):
+sbatch hpc/setup_env.sh
 
-# Add remote (replace with your actual GitHub URL)
-git remote add origin https://github.com/<username>/Diffusion_Robot_Control_Policy.git
-git branch -M main
-git push -u origin main
-```
+# 2. Submit training jobs in parallel:
+sbatch hpc/train_bc.sh
+DDPM_JOB=$(sbatch --parsable hpc/train_ddpm.sh)
+sbatch hpc/train_fm.sh
 
-### Regular Commits
+# 3. Auto-submit ablation when DDPM finishes:
+nohup bash hpc/watch_and_submit_ablation.sh $DDPM_JOB > logs/slurm/watcher.log 2>&1 &
 
-```bash
-# After completing a phase
-git add diffusion_policy/ config.py requirements.txt
-git commit -m "Phase 2: Implement conditional 1D U-Net architecture"
-git push origin main
-
-# Before pushing to Colab for training
-git add -A
-git commit -m "Ready for GPU training"
-git push origin main
-```
-
-### .gitignore
-
-Create `.gitignore` to exclude large files:
-
-```
-# Data
-data/
-*.zarr/
-
-# Checkpoints & logs
-checkpoints/
-logs/
-runs/
-
-# Python
-__pycache__/
-*.pyc
-*.egg-info/
-.pytest_cache/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-.env
+# Monitor:
+squeue -u gupta.yashv
 ```
 
 ---
 
-## Configuration
+## Key Design Decisions
 
-All hyperparameters are centralized in [config.py](config.py). Modify these to run ablations:
+**Why receding-horizon control?** The model generates 16 future actions but only executes the first 8. This keeps the robot responsive to unexpected events while maintaining short-term temporal coherence.
 
-```python
-from config import TrainConfig
+**Why DDIM over DDPM at test time?** DDIM skips most denoising steps algebraically — same trained model, 10× fewer network evaluations. It achieves equal or better success rate because deterministic sampling reduces variance across runs.
 
-cfg = TrainConfig()
-print(cfg.device)                    # Auto-detected device
-print(cfg.data.pred_horizon)         # 16 (actions to predict)
-print(cfg.data.action_horizon)       # 8 (actions to execute)
-print(cfg.diffusion.ddim_steps)      # 10 (DDIM inference steps)
-print(cfg.batch_size)                # 256
-print(cfg.learning_rate)             # 1e-4
-```
+**Why the cosine noise schedule needs clamping?** At K=100 steps, `ᾱ_99 ≈ 2×10⁻⁸`. DDIM's clean-action prediction divides by `√ᾱ_t`, which explodes at the final step. Clamping to `min=1e-3` and clipping `â₀ ∈ [-1,1]` brings success rate from 0% to 96%.
 
-For ablations, override at runtime:
-
-```bash
-# Prediction horizon ablation
-python train.py --pred_horizon 8 --num_epochs 100
-python train.py --pred_horizon 16 --num_epochs 100
-python train.py --pred_horizon 32 --num_epochs 100
-```
+**Why BC fails on PushT?** Experts sometimes approach the T-block from the left, sometimes from the right. Both are valid. An MLP averages these into a "middle" action that commits to neither, gets stuck, and fails. Diffusion samples *one* mode at a time and commits.
 
 ---
 
-## Troubleshooting
+## References
 
-### Data Issues
-- **Shapes don't match**: Check `config.py` values for `obs_horizon`, `pred_horizon`, `action_horizon`
-- **Values not in [-1, 1]**: Ensure normalizer is fitted on full dataset before training
-- **Missing dataset**: Download from [diffusion_policy repo](https://github.com/real-stanford/diffusion_policy) or use `pusht` package
-
-### Training Issues
-- **Loss doesn't decrease**: Check learning rate, gradient clipping, noise schedule (ᾱ_k values)
-- **Out of memory on GPU**: Reduce `batch_size` in config.py
-- **Model overfits on 1 batch**: Verify forward/reverse process with sanity checks in `ddpm.py`
-
-### Inference Issues
-- **Actions out of reasonable range**: Check unnormalization in `evaluate.py`
-- **Low success rate**: Verify EMA weights are being used; check observation history construction
-- **DDIM faster but worse quality**: Try more DDIM steps (e.g., 20 instead of 10)
-
----
-
-## Contributing & Citation
-
-If using this implementation in research:
-
-```bibtex
-@article{chi2023diffusion,
-  title={Diffusion Policy: Visuomotor Policy Learning via Action Diffusion},
-  author={Chi, Cheng and Feng, Siyuan and Du, Yilun and ...},
-  journal={Robotics: Science and Systems},
-  year={2023}
-}
-```
-
----
-
-## Future Work
-
-### Schrödinger Bridge Research
-- Add diffusion coefficient σ(t) to FM ODE
-- Estimate SB solutions using forward-backward SDE formulation
-- Connect to optimal transport theory
-- Application to multi-modal trajectory generation
-
----
-
-## Contact & Questions
-
-For questions or issues, refer to:
-- **Project Report**: [PROJECT_REPORT.md](PROJECT_REPORT.md)
-- **Timeline**: [TIMELINE.md](TIMELINE.md)
-- **Code**: Individual module docstrings in `diffusion_policy/`
-
----
-
-**Last Updated**: April 2026
-**Status**: Complete — 101 tests passing, 100-epoch training runs finished for both DDPM and Flow Matching, full evaluation done.
+1. Chi et al., *Diffusion Policy: Visuomotor Policy Learning via Action Diffusion* (RSS 2023)
+2. Ho et al., *Denoising Diffusion Probabilistic Models* (NeurIPS 2020)
+3. Song et al., *Denoising Diffusion Implicit Models* (ICLR 2021)
+4. Lipman et al., *Flow Matching for Generative Modeling* (ICLR 2023)
+5. Perez et al., *FiLM: Visual Reasoning with a General Conditioning Layer* (AAAI 2018)

@@ -17,7 +17,7 @@ wget https://diffusion-policy.cs.columbia.edu/data/training/pusht.zip
 unzip pusht.zip -d data/
 # → data/pusht_cchi_v7_replay.zarr  (206 episodes, 25,650 steps)
 
-# 3a. Train the policy — state observations (fast, ~14 hrs on MPS / ~2 hrs on GPU)
+# 3a. Train the policy — state observations (~4-6 hrs on A100 / ~14 hrs on MPS)
 python train.py \
     --dataset_path data/pusht_cchi_v7_replay.zarr \
     --num_epochs 100 --batch_size 256

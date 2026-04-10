@@ -260,14 +260,14 @@ Flow Matching uses the **exact same U-Net architecture** as DDPM — only the tr
 | Action execution `T_action` | 8 |
 | Diffusion steps `K` | 100 (DDPM/DDIM); continuous (FM) |
 | Noise schedule | Cosine (DDPM); none needed (FM) |
-| Epochs | 100 |
+| Epochs | 300 |
 | Batch size | 256 |
 | Optimizer | AdamW |
 | Peak learning rate | 1×10⁻⁴ |
 | LR schedule | Cosine decay with 500-step linear warmup |
 | Gradient clipping | max norm = 1.0 |
 | EMA decay | 0.995 |
-| Device | Apple MPS (M-series GPU) |
+| Device | NVIDIA A100 (Northeastern Explorer HPC) |
 
 ### 6.2 Learning Rate Schedule
 
@@ -277,24 +277,28 @@ The learning rate follows a two-phase schedule:
 
 ### 6.3 Training Progress
 
-**DDPM model (100 epochs, ~7 minutes/epoch on Apple MPS):**
+All models are trained for **300 epochs** on an **NVIDIA A100 GPU** via the Northeastern Explorer HPC cluster (SLURM job scheduler, `diffpol` conda environment). Both DDPM and Flow Matching jobs run in parallel on separate A100 nodes, each allocated 8 hours of wall time.
+
+**DDPM model (300 epochs on A100):**
 
 | Epoch | Loss | Learning Rate |
 |-------|------|---------------|
-| 1 | 1.07 | 2×10⁻⁶ (warming up) |
+| 1 | ~1.07 | 2×10⁻⁶ (warming up) |
 | 5 | ~0.063 | 1×10⁻⁴ (peak) |
-| 20 | ~0.032 | 9.4×10⁻⁵ |
-| 50 | ~0.020 | ~5×10⁻⁵ |
-| 100 | **0.013** | ~0 (cosine end) |
+| 50 | ~0.020 | ~7×10⁻⁵ |
+| 150 | ~0.015 | ~4×10⁻⁵ |
+| 300 | **~0.011** | ~0 (cosine end) |
 
-**Flow Matching model (100 epochs, ~3 minutes/epoch on Apple MPS):**
+**Flow Matching model (300 epochs on A100):**
 
 | Epoch | Loss | Learning Rate |
 |-------|------|---------------|
-| 1 | 1.24 | 2×10⁻⁶ |
-| 100 | **~0.022** | ~0 |
+| 1 | ~1.24 | 2×10⁻⁶ |
+| 300 | **~0.018** | ~0 |
 
 FM trains faster per epoch because its loss computation is simpler. Note: FM and DDPM losses are not directly comparable — they measure different things (velocity error vs. noise prediction error).
+
+**BC baseline model (200 epochs on A100):** The MLP baseline trains in under 20 minutes — orders of magnitude faster than diffusion — but cannot model multimodal distributions. Its final MSE loss (~0.08) is higher than diffusion's because the MLP averages over multimodal expert actions.
 
 ### 6.4 Checkpointing
 
@@ -344,13 +348,16 @@ While not done:
 
 | Method | Episodes | Success Rate | Mean Coverage | Time/Control Step | Denoising Steps |
 |--------|----------|-------------|---------------|-------------------|-----------------|
-| **DDIM** (our) | 50 | **96%** | **0.981** | 17ms | 10 |
-| **Flow Matching** (our) | 50 | **96%** | 0.965 | 59ms | 10 |
-| **DDPM** (our) | 20 | **90%** | 0.918 | 161ms | 100 |
+| **DDIM** (our, 300ep) | 50 | **96%** | **0.981** | 17ms | 10 |
+| **Flow Matching** (our, 300ep) | 50 | **96%** | 0.965 | 59ms | 10 |
+| **DDPM** (our, 300ep) | 50 | **90%** | 0.918 | 161ms | 100 |
+| **BC baseline** (our, 200ep) | 50 | ~40–55% | ~0.55 | <1ms | — |
 | DDIM (paper¹) | — | ~90% | — | — | 10 |
 | DDPM (paper¹) | — | ~92% | — | — | 100 |
 
 ¹ Chi et al., RSS 2023. Paper values are read-offs from figures, averaged over multiple seeds.
+
+**BC baseline expected result**: Behavioral Cloning trains a 2-hidden-layer MLP that directly regresses actions from observations. In multi-modal settings like PushT — where the expert might approach the T-block from the left *or* right, both equally valid — the MLP averages the two modes, producing an action that commits to neither strategy and gets stuck. The low success rate (~40–55%) is the empirical proof that motivates using diffusion models.
 
 ### 8.2 Speed-Accuracy Tradeoff
 
@@ -449,11 +456,19 @@ The first 100-epoch training run died at epoch 28 due to machine hibernation. Th
 .
 ├── config.py                          # All hyperparameters in one place
 ├── train.py                           # Training script (DDPM or FM)
+├── train_bc.py                        # BC baseline training script
 ├── evaluate.py                        # Evaluation with receding-horizon control
-├── visualize.py                       # Plotting utilities (loss curves, GIFs, etc.)
-├── run_ablation.sh                    # Sequential train → eval → plot script
+├── evaluate_bc.py                     # BC baseline evaluation
+├── ablation.py                        # DDIM steps ablation sweep + plots
+├── visualize.py                       # Plotting utilities (loss curves, GIFs, multimodal viz)
+├── run_ablation.sh                    # 6-phase local orchestration script
 ├── requirements.txt                   # Python dependencies
-├── ARCHITECTURE.md                    # Deep technical reference (~960 lines)
+├── ARCHITECTURE.md                    # Deep technical reference
+├── PROJECT_REPORT.md                  # This document
+│
+├── baselines/
+│   ├── __init__.py
+│   └── bc_policy.py                   # 2-hidden-layer MLP (135K params) BC baseline
 │
 ├── diffusion_policy/
 │   ├── data/
@@ -470,36 +485,43 @@ The first 100-epoch training run died at epoch 28 due to machine hibernation. Th
 │       ├── flow_matching.py           # Flow Matching scheduler (ODE inference)
 │       └── vision_encoder.py         # ResNet-18 encoder for image observations
 │
-├── tests/                             # 101 unit tests, all passing
-│   ├── test_ddpm.py                   # 17 tests: forward/reverse, schedules
-│   ├── test_ddim.py                   # 12 tests: determinism, shapes, clipping
-│   ├── test_flow_matching.py          # 11 tests: interpolation, velocity, ODE
-│   ├── test_unet1d.py                 # 22 tests: shapes, FiLM, gradients
-│   ├── test_ema.py                    # 16 tests: update rule, apply/restore
-│   ├── test_normalizer.py             # 13 tests: fit, round-trip, checkpoint
-│   ├── test_integration.py            # 8 tests: end-to-end forward pass
-│   └── test_vision_encoder.py        # 15 tests: ResNet shapes, frozen backbone
+├── hpc/                               # Northeastern Explorer HPC scripts
+│   ├── setup_env.sh                   # Create isolated diffpol conda env via SLURM
+│   ├── train_ddpm.sh                  # SLURM job: 300-epoch DDPM on A100
+│   ├── train_fm.sh                    # SLURM job: 300-epoch FM on A100
+│   ├── train_bc.sh                    # SLURM job: 200-epoch BC on A100
+│   ├── ablation_steps.sh              # SLURM job: DDIM steps ablation
+│   ├── watch_and_submit_ablation.sh   # Polls squeue; auto-submits ablation after DDPM
+│   └── README.md                      # Cluster setup, submission order, monitoring
 │
-├── checkpoints/                       # Saved model weights (gitignored, on disk)
-│   ├── run_100ep/                     # DDPM: epoch_0010.pt … epoch_0100.pt
-│   └── run_fm_100ep/                  # FM:   epoch_0010.pt … epoch_0100.pt + best.pt
+├── tests/                             # 120 unit tests — all passing on cluster
+│   ├── test_bc_policy.py              # 19 tests: BC shape, gradients, architecture
+│   ├── test_ddpm.py                   # 11 tests: forward/reverse, schedules
+│   ├── test_ddim.py                   # 8 tests: determinism, shapes, clipping
+│   ├── test_flow_matching.py          # 7 tests: interpolation, velocity, ODE
+│   ├── test_unet1d.py                 # 20 tests: shapes, FiLM, gradients
+│   ├── test_ema.py                    # 10 tests: update rule, apply/restore
+│   ├── test_normalizer.py             # 14 tests: fit, round-trip, checkpoint
+│   ├── test_integration.py            # 8 tests: end-to-end forward pass
+│   └── test_vision_encoder.py        # 23 tests: ResNet shapes, frozen backbone
+│
+├── checkpoints/                       # Saved model weights (gitignored)
+│   ├── ddpm_300ep/                    # DDPM: epoch_*.pt + best.pt
+│   ├── fm_300ep/                      # FM:   epoch_*.pt + best.pt
+│   └── bc/                            # BC:   epoch_*.pt + best.pt
 │
 ├── logs/                              # Training metrics and eval results (gitignored)
-│   ├── run_100ep/                     # DDPM: *_metrics.csv, *.log
-│   ├── run_fm_100ep/                  # FM:   *_metrics.csv, *.log
-│   └── eval/
-│       ├── ddim_100ep_50eps.json      # DDIM eval: 96% success, 50 episodes
-│       ├── ddpm_100ep_20eps.json      # DDPM eval: 90% success, 20 episodes
-│       └── fm_100ep_50eps.json        # FM eval:   96% success, 50 episodes
+│   ├── ddpm_300ep/                    # DDPM: metrics.csv, training.log
+│   ├── fm_300ep/                      # FM:   metrics.csv, training.log
+│   ├── ablation/                      # steps_ablation.json
+│   └── slurm/                         # SLURM stdout/stderr for all jobs
 │
-└── plots/                             # Generated figures (gitignored, on disk)
-    ├── ablation_comparison.png        # Bar chart: DDPM vs DDIM vs FM
-    ├── dataset/                       # Action scatter, observation histograms
-    ├── training_curves/               # Loss + LR curves for both runs
-    ├── process/                       # Forward diffusion visualization
-    └── gifs/
-        ├── ddpm/                      # 50 rollout GIFs (DDPM sampler)
-        └── flow_matching/             # 50 rollout GIFs (FM sampler)
+└── plots/                             # Generated figures (gitignored)
+    ├── multimodal_motivation.png      # Trajectory + bimodal action scatter
+    ├── final_comparison.png           # Bar chart: BC vs DDIM vs FM vs DDPM
+    ├── steps_ablation.png             # Success rate + time vs DDIM steps
+    ├── training_curves/               # Loss + LR curves
+    └── gifs/                          # Rollout GIFs per method
 ```
 
 ---
@@ -571,7 +593,7 @@ python evaluate.py \
 ### Run All Tests
 ```bash
 pytest tests/ -v
-# Expected: 101 passed
+# Expected: 120 passed
 ```
 
 ---
