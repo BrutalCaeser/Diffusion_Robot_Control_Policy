@@ -70,6 +70,97 @@ def _save(fig: plt.Figure, path: str | Path, dpi: int = 150) -> None:
 # 1. Dataset analysis
 # ==============================================================================
 
+def plot_multimodal_trajectories(
+    dataset_path: str,
+    save_path: str = "plots/multimodal_trajectories.png",
+    num_episodes: int = 40,
+) -> None:
+    """
+    THE MOST IMPORTANT VISUALIZATION IN THIS PROJECT.
+
+    Overlays many expert demonstration trajectories on a single plot to show
+    that the same task can be solved via MULTIPLE distinct strategies — some
+    approaching the T-block from the left, some from the right.
+
+    This multimodality is WHY Behavioral Cloning fails and WHY Diffusion Policy
+    succeeds. Show this plot FIRST in any presentation.
+
+    Left panel:  Agent (x, y) paths across 40 episodes — multiple clusters visible
+    Right panel: Action (vx, vy) distribution coloured by episode — bimodal shape
+
+    Args:
+        dataset_path:  Path to the PushT Zarr dataset.
+        save_path:     Output file path.
+        num_episodes:  Number of episodes to overlay (40 is readable).
+    """
+    import zarr
+
+    root    = zarr.open(store=dataset_path, mode="r")
+    states  = root["data"]["state"][:]         # (N, 5): agent_xy, block_xy, angle
+    actions = root["data"]["action"][:]        # (N, 2): vx, vy
+    ep_ends = root["meta"]["episode_ends"][:]  # (num_eps,)
+
+    ep_starts = np.concatenate([[0], ep_ends[:-1]])
+    total_eps = len(ep_ends)
+    rng       = np.random.default_rng(seed=42)
+    ep_idx    = rng.choice(total_eps, size=min(num_episodes, total_eps), replace=False)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    fig.suptitle(
+        "Push-T Expert Demonstrations — Multimodal Behaviour\n"
+        "The same task is solved via different strategies: this is why BC fails.",
+        fontsize=12, fontweight="bold",
+    )
+
+    cmap   = plt.cm.tab20
+    colors = [cmap(i / max(1, len(ep_idx) - 1)) for i in range(len(ep_idx))]
+
+    for color, ei in zip(colors, ep_idx):
+        s, e = int(ep_starts[ei]), int(ep_ends[ei])
+        traj = states[s:e, :2]   # agent (x, y) positions
+
+        ax1.plot(traj[:, 0], traj[:, 1], color=color, alpha=0.5, lw=0.9)
+        ax1.scatter(traj[0, 0],  traj[0, 1],  color=color, s=20, zorder=3)
+        ax1.scatter(traj[-1, 0], traj[-1, 1], color=color, s=20,
+                    marker="x", zorder=3)
+
+        ax2.scatter(
+            actions[s:e, 0], actions[s:e, 1],
+            color=color, alpha=0.25, s=3,
+        )
+
+    ax1.set_xlabel("agent_x (position)")
+    ax1.set_ylabel("agent_y (position)")
+    ax1.set_title(
+        f"Agent trajectories ({len(ep_idx)} episodes)\n"
+        "● = episode start,  ✕ = episode end",
+        fontsize=10,
+    )
+    ax1.set_aspect("equal")
+    ax1.invert_yaxis()   # PushT screen coordinates: y increases downward
+
+    ax2.set_xlabel("action vx (x-velocity)")
+    ax2.set_ylabel("action vy (y-velocity)")
+    ax2.set_title(
+        "Action distribution (coloured by episode)\n"
+        "Multiple clusters = multiple valid strategies",
+        fontsize=10,
+    )
+
+    # Add a text box explaining the implication
+    ax2.text(
+        0.02, 0.02,
+        "BC averages these clusters → stuck action\n"
+        "Diffusion samples ONE cluster → commits to a strategy",
+        transform=ax2.transAxes,
+        fontsize=8, verticalalignment="bottom",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.9),
+    )
+
+    plt.tight_layout()
+    _save(fig, save_path)
+
+
 def plot_dataset_summary(
     dataset_path: str,
     save_dir: str = "plots",
@@ -351,39 +442,52 @@ def plot_eval_comparison(
     title: str = "Method Comparison on PushT",
 ) -> None:
     """
-    Bar chart comparing evaluation metrics across different methods/settings.
+    Bar chart comparing evaluation metrics across methods/settings.
+
+    Designed to show all four methods in one figure:
+        BC (baseline) | DDPM | DDIM | Flow Matching
+
+    The BC bar being lowest is intentional — it illustrates the problem
+    that diffusion solves. This is the project's central empirical result.
 
     Args:
-        results: Dict of {method_name: {metric_name: value}}.
-                 e.g. {"DDPM (100 steps)": {"success_rate": 0.82, ...},
-                        "DDIM (10 steps)":  {"success_rate": 0.79, ...}}
+        results:   {method_name: {metric_name: value}}
+                   e.g. {"BC (baseline)":     {"success_rate": 0.48, ...},
+                          "DDPM (100 steps)": {"success_rate": 0.90, ...},
+                          "DDIM (10 steps)":  {"success_rate": 0.96, ...},
+                          "Flow Matching":    {"success_rate": 0.96, ...}}
         save_path: Output path.
         title:     Figure title.
     """
     methods = list(results.keys())
-    metrics = ["success_rate", "mean_score"]
-    colors  = list(_PALETTE.values())[:len(methods)]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    # Assign consistent colours: BC gets a muted red to stand out as the baseline
+    default_colors = [_PALETTE["noise"], _PALETTE["ddpm"],
+                      _PALETTE["ddim"], _PALETTE["flow"]]
+    colors = (default_colors + list(_PALETTE.values()))[:len(methods)]
+
+    fig, axes = plt.subplots(1, 2, figsize=(max(10, len(methods) * 2), 5))
     fig.suptitle(title, fontsize=13, fontweight="bold")
 
-    for ax, metric in zip(axes, metrics):
+    for ax, metric in zip(axes, ["success_rate", "mean_score"]):
         values = [results[m].get(metric, 0.0) for m in methods]
-        bars = ax.bar(methods, values, color=colors, edgecolor="white", alpha=0.85)
-        ax.set_ylabel(metric.replace("_", " ").title())
-        ax.set_title(metric.replace("_", " ").title())
-        ax.set_ylim(0, 1.05)
+        bars   = ax.bar(methods, values, color=colors, edgecolor="white", alpha=0.85)
+
+        ax.set_ylabel(metric.replace("_", " ").title(), fontsize=11)
+        ax.set_title(metric.replace("_", " ").title(), fontsize=11)
+        ax.set_ylim(0, 1.1)
+        ax.tick_params(axis="x", rotation=15)
 
         for bar, val in zip(bars, values):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + 0.01,
-                f"{val:.3f}",
-                ha="center", va="bottom", fontsize=9,
+                f"{val:.2f}",
+                ha="center", va="bottom", fontsize=9, fontweight="bold",
             )
 
-        ax.axhline(0.9, ls=":", color="gray", lw=1, label="target (0.9)")
-        ax.legend()
+        ax.axhline(0.9, ls="--", color="gray", lw=1.2, label="target ≥ 0.9")
+        ax.legend(fontsize=9)
 
     plt.tight_layout()
     _save(fig, save_path)
