@@ -1,0 +1,12 @@
+{
+  "mean_score": 0.2406,
+  "success_rate": 0.0400,
+  "mean_ep_len": 300.0,
+  "inference_time_per_step": 0.0006,
+  "policy": "bc",
+  "num_episodes": 50,
+  "checkpoint": "checkpoints/bc/best.pt",
+  "epochs": 200,
+  "device": "cuda:0 (A100)",
+  "date": "2026-04-10"
+}

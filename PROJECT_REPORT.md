@@ -351,13 +351,13 @@ While not done:
 | **DDIM** (our, 300ep) | 50 | **96%** | **0.981** | 17ms | 10 |
 | **Flow Matching** (our, 300ep) | 50 | **96%** | 0.965 | 59ms | 10 |
 | **DDPM** (our, 300ep) | 50 | **90%** | 0.918 | 161ms | 100 |
-| **BC baseline** (our, 200ep) | 50 | ~40–55% | ~0.55 | <1ms | — |
+| **BC baseline** (our, 200ep) | 50 | **4%** | 0.241 | 0.6ms | — |
 | DDIM (paper¹) | — | ~90% | — | — | 10 |
 | DDPM (paper¹) | — | ~92% | — | — | 100 |
 
 ¹ Chi et al., RSS 2023. Paper values are read-offs from figures, averaged over multiple seeds.
 
-**BC baseline expected result**: Behavioral Cloning trains a 2-hidden-layer MLP that directly regresses actions from observations. In multi-modal settings like PushT — where the expert might approach the T-block from the left *or* right, both equally valid — the MLP averages the two modes, producing an action that commits to neither strategy and gets stuck. The low success rate (~40–55%) is the empirical proof that motivates using diffusion models.
+**BC baseline result**: Behavioral Cloning trains a 2-hidden-layer MLP that directly regresses actions from observations. In multi-modal settings like PushT — where the expert might approach the T-block from the left *or* right, both equally valid — the MLP averages the two modes and produces an action that commits to neither strategy. Every single BC episode hit the 300-step timeout (mean episode length = 300.0), and the agent never meaningfully moved the block (mean coverage = 0.241). The **24× gap** (4% vs 96%) is the empirical proof that motivates using diffusion models.
 
 ### 8.2 Speed-Accuracy Tradeoff
 
@@ -510,7 +510,13 @@ The first 100-epoch training run died at epoch 28 due to machine hibernation. Th
 │   ├── fm_300ep/                      # FM:   epoch_*.pt + best.pt
 │   └── bc/                            # BC:   epoch_*.pt + best.pt
 │
-├── logs/                              # Training metrics and eval results (gitignored)
+├── results/                           # Evaluation result JSONs (tracked in git)
+│   ├── bc_50eps.json                  # BC: 4% success, 50 episodes
+│   ├── ddim_50eps.json                # DDIM: 96% success (populated after HPC run)
+│   ├── ddpm_50eps.json                # DDPM: 90% success (populated after HPC run)
+│   └── fm_50eps.json                  # FM: 96% success (populated after HPC run)
+│
+├── logs/                              # Training metrics and eval logs (gitignored)
 │   ├── ddpm_300ep/                    # DDPM: metrics.csv, training.log
 │   ├── fm_300ep/                      # FM:   metrics.csv, training.log
 │   ├── ablation/                      # steps_ablation.json

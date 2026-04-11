@@ -50,6 +50,7 @@ runs/
 wandb/
 outputs/
 *.log
+# Evaluation results (JSON) go in results/ which is tracked
 
 # ---- Jupyter Notebooks (optional: track .ipynb but ignore checkpoints) ----
 .ipynb_checkpoints/
@@ -61,6 +62,10 @@ outputs/
 *.jpg
 !docs/*.png
 !docs/*.jpg
+# Track key result plots (not GIFs, not per-episode frames)
+!plots/multimodal_motivation.png
+!plots/final_comparison.png
+!plots/steps_ablation.png
 
 # macOS resource forks
 ._*

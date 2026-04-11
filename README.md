@@ -27,7 +27,7 @@ All models are trained on 300 epochs (BC: 200 epochs) on NVIDIA A100 GPUs via th
 | DDIM (ours) | **96%** | 17 ms | 10 |
 | Flow Matching (ours) | **96%** | 59 ms | 10 |
 | DDPM (ours) | **90%** | 161 ms | 100 |
-| BC baseline (ours) | ~40–55% | <1 ms | — |
+| BC baseline (ours) | **4%** | 0.6 ms | — |
 | DDIM (Chi et al., 2023) | ~90% | — | 10 |
 
 The BC baseline's low success rate is the point: averaging over multi-modal expert actions produces stuck behavior. Diffusion commits to one mode at a time.
