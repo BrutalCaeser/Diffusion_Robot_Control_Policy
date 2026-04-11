@@ -1,0 +1,13 @@
+{
+  "mean_score": 0.8296,
+  "success_rate": 0.8000,
+  "mean_ep_len": 251.60,
+  "inference_time_per_step": 0.0838,
+  "sampler": "ddpm",
+  "ddpm_steps": 100,
+  "num_episodes": 50,
+  "checkpoint": "checkpoints/ddpm_300ep/best.pt",
+  "epochs": 300,
+  "device": "cuda (V100 SXM2)",
+  "date": "2026-04-11"
+}
