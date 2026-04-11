@@ -1,0 +1,62 @@
+{
+  "DDIM-1": {
+    "mean_score": 0.08829316179530063,
+    "success_rate": 0.0,
+    "mean_ep_len": 300.0,
+    "inference_time_per_step": 0.002319853252834744,
+    "sampler": "ddim",
+    "num_episodes": 30,
+    "n_ddim_steps": 1,
+    "wall_time_s": 20.882832050323486
+  },
+  "DDIM-5": {
+    "mean_score": 0.991369437181882,
+    "success_rate": 1.0,
+    "mean_ep_len": 203.03333333333333,
+    "inference_time_per_step": 0.005631894553320256,
+    "sampler": "ddim",
+    "num_episodes": 30,
+    "n_ddim_steps": 5,
+    "wall_time_s": 34.30652141571045
+  },
+  "DDIM-10": {
+    "mean_score": 0.9584175216672312,
+    "success_rate": 0.9333333333333333,
+    "mean_ep_len": 224.4,
+    "inference_time_per_step": 0.00976548733912404,
+    "sampler": "ddim",
+    "num_episodes": 30,
+    "n_ddim_steps": 10,
+    "wall_time_s": 65.7440276145935
+  },
+  "DDIM-20": {
+    "mean_score": 0.9959020601309423,
+    "success_rate": 1.0,
+    "mean_ep_len": 231.6,
+    "inference_time_per_step": 0.018102764362704155,
+    "sampler": "ddim",
+    "num_episodes": 30,
+    "n_ddim_steps": 20,
+    "wall_time_s": 125.78019261360168
+  },
+  "DDIM-50": {
+    "mean_score": 0.9473635489720361,
+    "success_rate": 0.9333333333333333,
+    "mean_ep_len": 226.1,
+    "inference_time_per_step": 0.04292192709370382,
+    "sampler": "ddim",
+    "num_episodes": 30,
+    "n_ddim_steps": 50,
+    "wall_time_s": 291.14196825027466
+  },
+  "DDIM-100": {
+    "mean_score": 0.9887592547149047,
+    "success_rate": 1.0,
+    "mean_ep_len": 238.6,
+    "inference_time_per_step": 0.08400780190699392,
+    "sampler": "ddim",
+    "num_episodes": 30,
+    "n_ddim_steps": 100,
+    "wall_time_s": 601.331874370575
+  }
+}
