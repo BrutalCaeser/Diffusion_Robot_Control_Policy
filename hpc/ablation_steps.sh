@@ -12,12 +12,12 @@
 #     sbatch hpc/ablation_steps.sh
 
 #SBATCH --job-name=dp_ablation
-#SBATCH --partition=gpu
+#SBATCH --partition=courses-gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16G
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:v100-sxm2:1
 #SBATCH --time=02:00:00
 #SBATCH --output=/scratch/gupta.yashv/diffusion_policy/logs/slurm/ablation_%j.out
 #SBATCH --error=/scratch/gupta.yashv/diffusion_policy/logs/slurm/ablation_%j.err

@@ -8,13 +8,13 @@
 # Submit:   sbatch hpc/train_fm.sh
 
 #SBATCH --job-name=dp_fm
-#SBATCH --partition=gpu
+#SBATCH --partition=courses-gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --gres=gpu:a100:1
-#SBATCH --time=08:00:00
+#SBATCH --gres=gpu:v100-sxm2:1
+#SBATCH --time=20:00:00
 #SBATCH --output=/scratch/gupta.yashv/diffusion_policy/logs/slurm/fm_%j.out
 #SBATCH --error=/scratch/gupta.yashv/diffusion_policy/logs/slurm/fm_%j.err
 
