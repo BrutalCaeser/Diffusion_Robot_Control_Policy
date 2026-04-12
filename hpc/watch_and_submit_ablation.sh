@@ -18,7 +18,7 @@ if [ -z "$DDPM_JOB_ID" ]; then
   exit 1
 fi
 
-PROJECT=/scratch/gupta.yashv/diffusion_policy
+PROJECT=/scratch/$USER/diffusion_policy
 LOG="$PROJECT/logs/slurm/ablation_watcher.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
