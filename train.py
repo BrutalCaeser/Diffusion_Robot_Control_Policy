@@ -534,23 +534,44 @@ def parse_args() -> argparse.Namespace:
                    help="Path to checkpoint to resume training from")
     p.add_argument("--save_interval",   type=int,   default=None,
                    help="Save a checkpoint every N epochs (default: 50)")
+    # Ablation sweep args — vary these to study the effect of each hyperparameter
+    p.add_argument("--pred_horizon",        type=int,   default=None,
+                   help="Future actions to predict, T_pred (default: 16)")
+    p.add_argument("--obs_horizon",         type=int,   default=None,
+                   help="Past observations to condition on, T_obs (default: 2)")
+    p.add_argument("--action_horizon",      type=int,   default=None,
+                   help="Actions to execute before re-planning (default: 8)")
+    p.add_argument("--num_diffusion_steps", type=int,   default=None,
+                   help="Total DDPM noise steps K (default: 100)")
+    p.add_argument("--ddim_steps",          type=int,   default=None,
+                   help="DDIM inference steps, subset of K (default: 10)")
+    p.add_argument("--beta_schedule",       type=str,   default=None,
+                   help="Noise schedule: 'cosine' (default) or 'linear'")
 
     return p.parse_args()
 
 
 def apply_overrides(cfg: TrainConfig, args: argparse.Namespace) -> TrainConfig:
     """Apply non-None CLI arguments as overrides to the config."""
-    if args.method         is not None: cfg.method             = args.method
-    if args.batch_size     is not None: cfg.batch_size          = args.batch_size
-    if args.num_epochs     is not None: cfg.num_epochs          = args.num_epochs
-    if args.learning_rate  is not None: cfg.learning_rate       = args.learning_rate
-    if args.seed           is not None: cfg.seed                = args.seed
-    if args.dataset_path   is not None: cfg.data.dataset_path   = args.dataset_path
-    if args.checkpoint_dir is not None: cfg.checkpoint_dir      = args.checkpoint_dir
-    if args.log_dir        is not None: cfg.log_dir             = args.log_dir
-    if args.device         is not None: cfg.device              = args.device
-    if args.obs_type       is not None: cfg.data.obs_type       = args.obs_type
-    if args.save_interval  is not None: cfg.save_interval       = args.save_interval
+    if args.method              is not None: cfg.method                        = args.method
+    if args.batch_size          is not None: cfg.batch_size                    = args.batch_size
+    if args.num_epochs          is not None: cfg.num_epochs                    = args.num_epochs
+    if args.learning_rate       is not None: cfg.learning_rate                 = args.learning_rate
+    if args.seed                is not None: cfg.seed                          = args.seed
+    if args.dataset_path        is not None: cfg.data.dataset_path             = args.dataset_path
+    if args.checkpoint_dir      is not None: cfg.checkpoint_dir                = args.checkpoint_dir
+    if args.log_dir             is not None: cfg.log_dir                       = args.log_dir
+    if args.device              is not None: cfg.device                        = args.device
+    if args.obs_type            is not None: cfg.data.obs_type                 = args.obs_type
+    if args.save_interval       is not None: cfg.save_interval                 = args.save_interval
+    # Ablation overrides — horizons
+    if args.pred_horizon        is not None: cfg.data.pred_horizon             = args.pred_horizon
+    if args.obs_horizon         is not None: cfg.data.obs_horizon              = args.obs_horizon
+    if args.action_horizon      is not None: cfg.data.action_horizon           = args.action_horizon
+    # Ablation overrides — diffusion schedule
+    if args.num_diffusion_steps is not None: cfg.diffusion.num_diffusion_steps = args.num_diffusion_steps
+    if args.ddim_steps          is not None: cfg.diffusion.ddim_steps          = args.ddim_steps
+    if args.beta_schedule       is not None: cfg.diffusion.beta_schedule       = args.beta_schedule
     return cfg
 
 
