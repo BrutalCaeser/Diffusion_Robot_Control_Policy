@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hpc/train_fm.sh — Train Flow Matching Policy on Northeastern Explorer
 # ======================================================================
-# Cluster:  explorer.northeastern.edu  |  Login: gupta.yashv@explorer.northeastern.edu
+# Cluster:  explorer.northeastern.edu  |  Login: $USER@explorer.northeastern.edu
 # Requires: setup_env.sh to have run successfully first.
 # Note:     Runs in parallel with train_ddpm.sh — same wall-clock, same GPU config.
 #
@@ -15,8 +15,8 @@
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:v100-sxm2:1
 #SBATCH --time=20:00:00
-#SBATCH --output=/scratch/gupta.yashv/diffusion_policy/logs/slurm/fm_%j.out
-#SBATCH --error=/scratch/gupta.yashv/diffusion_policy/logs/slurm/fm_%j.err
+#SBATCH --output=/scratch/$USER/diffusion_policy/logs/slurm/fm_%j.out
+#SBATCH --error=/scratch/$USER/diffusion_policy/logs/slurm/fm_%j.err
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ module load anaconda3/2024.06
 module load cuda/12.1.1
 source activate diffpol
 
-PROJECT=/scratch/gupta.yashv/diffusion_policy
+PROJECT=/scratch/$USER/diffusion_policy
 DATASET=$PROJECT/data/pusht_cchi_v7_replay.zarr
 
 echo "============================================"
