@@ -1,0 +1,13 @@
+{
+  "mean_score": 0.9890,
+  "success_rate": 0.9800,
+  "mean_ep_len": 200.14,
+  "inference_time_per_step": 0.0089,
+  "sampler": "flow",
+  "num_inference_steps": 10,
+  "num_episodes": 50,
+  "checkpoint": "checkpoints/fm_300ep/best.pt",
+  "epochs": 300,
+  "device": "cuda (V100 SXM2)",
+  "date": "2026-04-11"
+}

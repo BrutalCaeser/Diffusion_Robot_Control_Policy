@@ -24,13 +24,13 @@ All models are trained on 300 epochs (BC: 200 epochs) on NVIDIA A100 GPUs via th
 
 | Method | Success Rate | Inference Time | Steps |
 |--------|-------------|----------------|-------|
+| Flow Matching (ours, 300ep) | **98%** | 8.9 ms | 10 |
 | DDIM (ours, 300ep) | **92%** | 10 ms | 10 |
-| Flow Matching (ours, 300ep) | *pending* | — | 10 |
 | DDPM (ours, 300ep) | **80%** | 84 ms | 100 |
 | BC baseline (ours, 200ep) | **4%** | 0.6 ms | — |
 | DDIM (Chi et al., 2023) | ~90% | — | 10 |
 
-The BC baseline's low success rate is the point: averaging over multi-modal expert actions produces stuck behavior. Diffusion commits to one mode at a time.
+FM is the strongest method — 98% success, fastest episodes (mean 200 steps), near-identical speed to DDIM. The BC baseline's 4% rate proves the point: averaging over multi-modal expert actions produces stuck behavior. Diffusion (and FM) commit to one mode at a time.
 
 ---
 
