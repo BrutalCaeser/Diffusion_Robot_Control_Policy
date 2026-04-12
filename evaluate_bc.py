@@ -187,7 +187,7 @@ def run_evaluation_bc(
     t_total = 0.0
 
     if gif_dir is None:
-        gif_dir = "logs/bc_gifs"
+        gif_dir = "plots/gifs/bc"
 
     for ep_i in range(num_episodes):
         t0 = time.time()

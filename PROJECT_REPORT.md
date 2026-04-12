@@ -279,26 +279,34 @@ The learning rate follows a two-phase schedule:
 
 All models are trained for **300 epochs** on an **NVIDIA A100 GPU** via the Northeastern Explorer HPC cluster (SLURM job scheduler, `diffpol` conda environment). Both DDPM and Flow Matching jobs run in parallel on separate A100 nodes, each allocated 8 hours of wall time.
 
-**DDPM model (300 epochs on A100):**
+**DDPM model (300 epochs, V100 SXM2):**
 
 | Epoch | Loss | Learning Rate |
 |-------|------|---------------|
-| 1 | ~1.07 | 2×10⁻⁶ (warming up) |
-| 5 | ~0.063 | 1×10⁻⁴ (peak) |
-| 50 | ~0.020 | ~7×10⁻⁵ |
-| 150 | ~0.015 | ~4×10⁻⁵ |
-| 300 | **~0.011** | ~0 (cosine end) |
+| 1 | 0.578 | 2×10⁻⁵ (warming up) |
+| 5 | 0.061 | 1×10⁻⁴ (peak) |
+| 20 | 0.031 | 9.94×10⁻⁵ |
+| 50 | 0.023 | 9.44×10⁻⁵ |
+| 100 | 0.018 | 7.65×10⁻⁵ |
+| 150 | 0.012 | 5.13×10⁻⁵ |
+| 200 | 0.0087 | 2.58×10⁻⁵ |
+| 250 | 0.0059 | 6.92×10⁻⁶ |
+| 300 | **0.0055** | 0 (cosine end) |
 
-**Flow Matching model (300 epochs on A100):**
+**Flow Matching model (300 epochs, V100 SXM2):**
 
 | Epoch | Loss | Learning Rate |
 |-------|------|---------------|
-| 1 | ~1.24 | 2×10⁻⁶ |
-| 300 | **~0.018** | ~0 |
+| 1 | 0.720 | 2×10⁻⁵ |
+| 5 | 0.132 | 1×10⁻⁴ |
+| 50 | 0.049 | 9.44×10⁻⁵ |
+| 100 | 0.034 | 7.65×10⁻⁵ |
+| 200 | 0.021 | 2.58×10⁻⁵ |
+| 300 | **0.0141** | 0 (cosine end) |
 
-FM trains faster per epoch because its loss computation is simpler. Note: FM and DDPM losses are not directly comparable — they measure different things (velocity error vs. noise prediction error).
+**Important:** FM and DDPM losses are not directly comparable — they measure different quantities (velocity error `||v_θ − u||²` vs. noise prediction error `||ε_θ − ε||²`). FM's higher absolute loss does not imply worse performance; FM achieves 98% success vs. DDPM's 80%.
 
-**BC baseline model (200 epochs on A100):** The MLP baseline trains in under 20 minutes — orders of magnitude faster than diffusion — but cannot model multimodal distributions. Its final MSE loss (~0.08) is higher than diffusion's because the MLP averages over multimodal expert actions.
+**BC baseline (200 epochs, A100):** Trains in ~20 minutes. Final MSE ~0.08 — the MLP averages over multimodal expert actions and converges to a "middle" action that satisfies no mode, explaining the 4% success rate.
 
 ### 6.4 Checkpointing
 

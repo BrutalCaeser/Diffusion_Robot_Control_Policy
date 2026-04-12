@@ -66,6 +66,11 @@ outputs/
 !plots/multimodal_motivation.png
 !plots/final_comparison.png
 !plots/steps_ablation.png
+!plots/training_curves/ddpm_300ep.png
+!plots/training_curves/fm_300ep.png
+!plots/training_curves/ddpm_vs_fm_300ep.png
+!plots/dataset/dataset_summary.png
+!plots/process/diffusion_forward_process.png
 
 # macOS resource forks
 ._*
