@@ -1,7 +1,7 @@
 # HPC Scripts — Northeastern Explorer Cluster
 
 **Cluster:** `explorer.northeastern.edu`
-**Your login:** `gupta.yashv@explorer.northeastern.edu`
+**Your login:** `<your-username>@explorer.northeastern.edu`
 
 ---
 
@@ -9,10 +9,10 @@
 
 ```bash
 # 1. SSH into Explorer
-ssh gupta.yashv@explorer.northeastern.edu
+ssh <your-username>@explorer.northeastern.edu
 
 # 2. Go to your scratch space (fast I/O, for large files)
-cd /scratch/gupta.yashv
+cd /scratch/$USER
 mkdir -p diffusion_policy && cd diffusion_policy
 
 # 3. Clone the repo
@@ -22,7 +22,7 @@ git clone <your-repo-url> .
 mkdir -p data
 # Option A — scp from your Mac:
 #   scp -r /Volumes/Crucial_X9/Projects/ML_6140/pusht/pusht_cchi_v7_replay.zarr \
-#           gupta.yashv@explorer.northeastern.edu:/scratch/gupta.yashv/diffusion_policy/data/
+#           <your-username>@explorer.northeastern.edu:/scratch/$USER/diffusion_policy/data/
 # Option B — if already on the cluster:
 #   cp /path/on/cluster/pusht_cchi_v7_replay.zarr data/
 
@@ -44,7 +44,7 @@ pip install -r requirements.txt
 Submit all at once — they queue and run in parallel:
 
 ```bash
-# From project root: /scratch/gupta.yashv/diffusion_policy
+# From project root: /scratch/$USER/diffusion_policy
 
 # 1. BC baseline (fastest: ~20 min) — submit first, get results soonest
 sbatch hpc/train_bc.sh
@@ -56,7 +56,7 @@ sbatch hpc/train_ddpm.sh
 sbatch hpc/train_fm.sh
 
 # 4. Ablation — run AFTER train_ddpm.sh finishes (needs its checkpoint)
-#    Check if DDPM is done: squeue -u gupta.yashv
+#    Check if DDPM is done: squeue -u $USER
 sbatch hpc/ablation_steps.sh
 ```
 
@@ -65,10 +65,10 @@ sbatch hpc/ablation_steps.sh
 ## Monitor Your Jobs
 
 ```bash
-squeue -u gupta.yashv                        # see all your jobs + status
+squeue -u $USER                        # see all your jobs + status
 tail -f logs/slurm/ddpm_<jobid>.out          # live stdout from a job
 scancel <jobid>                              # cancel a job
-sacct -u gupta.yashv --format=JobID,State,Elapsed,MaxRSS   # job history
+sacct -u $USER --format=JobID,State,Elapsed,MaxRSS   # job history
 ```
 
 ---
@@ -94,7 +94,7 @@ All scripts respect these, so you can adjust paths without editing the files:
 
 | Variable | Default | Description |
 |---|---|---|
-| `PROJECT_DIR` | `/scratch/gupta.yashv/diffusion_policy` | Project root on cluster |
+| `PROJECT_DIR` | `/scratch/$USER/diffusion_policy` | Project root on cluster |
 | `DATASET_PATH` | `$PROJECT_DIR/data/pusht_cchi_v7_replay.zarr` | Dataset location |
 | `CKPT` | `checkpoints/ddpm_300ep/best.pt` | Checkpoint for ablation job |
 
@@ -111,9 +111,9 @@ After jobs finish, copy results back locally:
 
 ```bash
 # From your Mac:
-scp -r gupta.yashv@explorer.northeastern.edu:/scratch/gupta.yashv/diffusion_policy/checkpoints ./
-scp -r gupta.yashv@explorer.northeastern.edu:/scratch/gupta.yashv/diffusion_policy/logs ./
-scp -r gupta.yashv@explorer.northeastern.edu:/scratch/gupta.yashv/diffusion_policy/plots ./
+scp -r <your-username>@explorer.northeastern.edu:/scratch/$USER/diffusion_policy/checkpoints ./
+scp -r <your-username>@explorer.northeastern.edu:/scratch/$USER/diffusion_policy/logs ./
+scp -r <your-username>@explorer.northeastern.edu:/scratch/$USER/diffusion_policy/plots ./
 ```
 
 ---
