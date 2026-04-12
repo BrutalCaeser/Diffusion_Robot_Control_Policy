@@ -2,6 +2,11 @@
 # .gitignore for Diffusion Policy Project
 # ==============================================================================
 
+# ---- Node.js (pptx generation) ----
+node_modules/
+package-lock.json
+package.json
+
 # ---- Python ----
 __pycache__/
 *.py[cod]
@@ -18,6 +23,9 @@ build/
 /venv/
 /.venv/
 /env/
+
+# ---- Claude local memory (not for repo) ----
+.claude/
 
 # ---- IDE / Editor ----
 .vscode/
@@ -62,6 +70,9 @@ outputs/
 *.jpg
 !docs/*.png
 !docs/*.jpg
+# Track the generated presentation
+!Diffusion_Policy_PushT.pptx
+
 # Track key result plots (not GIFs, not per-episode frames)
 !plots/multimodal_motivation.png
 !plots/final_comparison.png
