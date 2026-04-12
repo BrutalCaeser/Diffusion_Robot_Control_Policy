@@ -22,7 +22,8 @@ set -euo pipefail
 
 module load anaconda3/2024.06
 module load cuda/12.1.1
-source activate diffpol
+CONDA_ENV=${CONDA_ENV:-diffusion}
+source activate $CONDA_ENV
 
 PROJECT=/scratch/$USER/diffusion_policy
 DATASET=$PROJECT/data/pusht_cchi_v7_replay.zarr

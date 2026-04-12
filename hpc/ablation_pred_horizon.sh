@@ -31,7 +31,8 @@ set -euo pipefail
 
 module load anaconda3/2024.06
 module load cuda/12.1.1
-source activate /home/$USER/envs/diffusion
+CONDA_ENV=${CONDA_ENV:-diffusion}   # override with: CONDA_ENV=myenv sbatch ...
+source activate $CONDA_ENV
 
 PROJECT=/scratch/$USER/diffusion_policy
 DATASET=$PROJECT/data/pusht_cchi_v7_replay.zarr
