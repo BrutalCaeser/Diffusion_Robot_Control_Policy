@@ -29,11 +29,10 @@
 
 set -euo pipefail
 
-module load anaconda3/2024.06
 module load cuda/12.1.1
-source activate diffpol
 
 PROJECT=/scratch/$USER/diffusion_policy
+source $PROJECT/venv/bin/activate   # use project venv instead of conda
 DATASET=$PROJECT/data/pusht_cchi_v7_replay.zarr
 
 cd $PROJECT
