@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hpc/train_bc.sh — Train Behavioral Cloning Baseline on Northeastern Explorer
 # =============================================================================
-# Cluster:  explorer.northeastern.edu  |  Login: gupta.yashv@explorer.northeastern.edu
+# Cluster:  explorer.northeastern.edu  |  Login: $USER@explorer.northeastern.edu
 # Requires: setup_env.sh to have run successfully first.
 # Note:     BC is fast (~20 min). Submit this FIRST to get baseline results early.
 #
@@ -15,8 +15,8 @@
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:a100:1
 #SBATCH --time=01:00:00
-#SBATCH --output=/scratch/gupta.yashv/diffusion_policy/logs/slurm/bc_%j.out
-#SBATCH --error=/scratch/gupta.yashv/diffusion_policy/logs/slurm/bc_%j.err
+#SBATCH --output=/scratch/$USER/diffusion_policy/logs/slurm/bc_%j.out
+#SBATCH --error=/scratch/$USER/diffusion_policy/logs/slurm/bc_%j.err
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ module load anaconda3/2024.06
 module load cuda/12.1.1
 source activate diffpol
 
-PROJECT=/scratch/gupta.yashv/diffusion_policy
+PROJECT=/scratch/$USER/diffusion_policy
 DATASET=$PROJECT/data/pusht_cchi_v7_replay.zarr
 
 echo "============================================"
