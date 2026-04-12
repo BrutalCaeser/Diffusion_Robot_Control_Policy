@@ -52,7 +52,7 @@ for PH in 8 16 32; do
         --method         ddpm \
         --pred_horizon   $PH \
         --action_horizon $AH \
-        --num_epochs     100 \
+        --num_epochs     50 \
         --batch_size     256 \
         --dataset_path   "$DATASET" \
         --checkpoint_dir checkpoints/ablation_ph${PH} \
