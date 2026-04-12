@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # hpc/train_ddpm.sh — Train DDPM Diffusion Policy on Northeastern Explorer
 # =========================================================================
-# Cluster:  explorer.northeastern.edu  |  Login: gupta.yashv@explorer.northeastern.edu
+# Cluster:  explorer.northeastern.edu
 # Requires: setup_env.sh to have run successfully first.
 #
 # Submit:   sbatch hpc/train_ddpm.sh
-# Monitor:  squeue -u gupta.yashv
-#           tail -f /scratch/gupta.yashv/diffusion_policy/logs/slurm/ddpm_<jobid>.out
+# Monitor:  squeue -u $USER
+#           tail -f /scratch/$USER/diffusion_policy/logs/slurm/ddpm_<jobid>.out
 
 #SBATCH --job-name=dp_ddpm
 #SBATCH --partition=courses-gpu
@@ -16,8 +16,8 @@
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:v100-sxm2:1
 #SBATCH --time=20:00:00
-#SBATCH --output=/scratch/gupta.yashv/diffusion_policy/logs/slurm/ddpm_%j.out
-#SBATCH --error=/scratch/gupta.yashv/diffusion_policy/logs/slurm/ddpm_%j.err
+#SBATCH --output=/scratch/%u/diffusion_policy/logs/slurm/ddpm_%j.out
+#SBATCH --error=/scratch/%u/diffusion_policy/logs/slurm/ddpm_%j.err
 
 set -euo pipefail
 
@@ -25,7 +25,7 @@ module load anaconda3/2024.06
 module load cuda/12.1.1
 source activate diffpol
 
-PROJECT=/scratch/gupta.yashv/diffusion_policy
+PROJECT=/scratch/$USER/diffusion_policy
 DATASET=$PROJECT/data/pusht_cchi_v7_replay.zarr
 
 echo "============================================"
