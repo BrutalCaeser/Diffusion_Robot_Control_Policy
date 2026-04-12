@@ -9,7 +9,7 @@
 # Submit:
 #   sbatch hpc/setup_env.sh
 #
-# When done (check: squeue -u gupta.yashv), proceed to submit training jobs.
+# When done (check: squeue -u $USER), proceed to submit training jobs.
 
 #SBATCH --job-name=setup_diffpol_env
 #SBATCH --partition=short
@@ -38,7 +38,8 @@ conda env remove -n diffpol -y 2>/dev/null || true
 echo "[1/4] Creating conda env diffpol (Python 3.10) …"
 conda create -n diffpol python=3.10 -y
 
-PYBIN=/home/gupta.yashv/.conda/envs/diffpol/bin
+# Derive the env's bin dir from conda rather than hardcoding a home path
+PYBIN=$(conda run -n diffpol which python | xargs dirname)
 echo "Python: $($PYBIN/python --version)"
 
 # Install PyTorch with CUDA 12.1 (matches cuda/12.1.1 module)
