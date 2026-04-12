@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # hpc/ablation_steps.sh — DDIM Inference Steps Ablation on Northeastern Explorer
 # ================================================================================
-# Cluster:  explorer.northeastern.edu  |  Login: gupta.yashv@explorer.northeastern.edu
+# Cluster:  explorer.northeastern.edu  |  Login: $USER@explorer.northeastern.edu
 # Requires: train_ddpm.sh to have completed (needs checkpoints/ddpm_300ep/best.pt).
 #
 # Submit AFTER DDPM training finishes:
 #   sbatch hpc/ablation_steps.sh
 #
 # Override checkpoint:
-#   CKPT=/scratch/gupta.yashv/diffusion_policy/checkpoints/ddpm_300ep/epoch_0150.pt \
+#   CKPT=/scratch/$USER/diffusion_policy/checkpoints/ddpm_300ep/epoch_0150.pt \
 #     sbatch hpc/ablation_steps.sh
 
 #SBATCH --job-name=dp_ablation
@@ -19,8 +19,8 @@
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:v100-sxm2:1
 #SBATCH --time=02:00:00
-#SBATCH --output=/scratch/gupta.yashv/diffusion_policy/logs/slurm/ablation_%j.out
-#SBATCH --error=/scratch/gupta.yashv/diffusion_policy/logs/slurm/ablation_%j.err
+#SBATCH --output=/scratch/$USER/diffusion_policy/logs/slurm/ablation_%j.out
+#SBATCH --error=/scratch/$USER/diffusion_policy/logs/slurm/ablation_%j.err
 
 set -euo pipefail
 
@@ -28,7 +28,7 @@ module load anaconda3/2024.06
 module load cuda/12.1.1
 source activate diffpol
 
-PROJECT=/scratch/gupta.yashv/diffusion_policy
+PROJECT=/scratch/$USER/diffusion_policy
 CKPT="${CKPT:-$PROJECT/checkpoints/ddpm_300ep/best.pt}"
 
 echo "============================================"
