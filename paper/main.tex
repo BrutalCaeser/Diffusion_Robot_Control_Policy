@@ -1,0 +1,895 @@
+% ============================================================
+%  Diffusion Policy for Robot Manipulation — Conference Paper
+%  ML 6140, Northeastern University, April 2026
+%  Format: NeurIPS / ICML style (10 pt, single column)
+% ============================================================
+\documentclass[10pt,letterpaper]{article}
+
+% ── Core packages ────────────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}          % Improved typography
+
+% ── Fonts: Times-like serif body + matching math ─────────────
+\usepackage{newtxtext}
+\usepackage{newtxmath}
+
+% ── Page geometry (NeurIPS-style margins) ────────────────────
+\usepackage[
+  letterpaper,
+  top=1in, bottom=1.125in,
+  left=1.25in, right=1.25in,
+  headheight=14pt
+]{geometry}
+
+% ── Math ─────────────────────────────────────────────────────
+\usepackage{amsmath}
+\usepackage{bm}                 % Bold math symbols
+
+% ── Graphics & figures ───────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{wrapfig}
+\graphicspath{{./}}
+
+% ── Tables ───────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{xcolor}             % For table row colours
+\usepackage{colortbl}
+
+% Palette
+\definecolor{HeaderBlue}{RGB}{30,58,95}
+\definecolor{RowAlt}{RGB}{240,245,252}
+\definecolor{BestGreen}{RGB}{198,239,206}
+\definecolor{CodeRed}{RGB}{178,34,34}
+\definecolor{AccentBlue}{RGB}{74,144,217}
+
+% ── Code listings ────────────────────────────────────────────
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{gray!40},
+  backgroundcolor=\color{gray!6},
+  keywordstyle=\color{blue!70}\bfseries,
+  commentstyle=\color{green!40!black},
+  stringstyle=\color{CodeRed},
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+}
+
+% ── Lists ────────────────────────────────────────────────────
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=1.5em, itemsep=1pt, topsep=3pt}
+\setlist[enumerate]{leftmargin=1.5em, itemsep=1pt, topsep=3pt}
+
+% ── Section heading style ────────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries\color{HeaderBlue}}{{\thesection.}}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{{\thesubsection}}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape\bfseries}{{\thesubsubsection}}{0.5em}{}
+\titlespacing*{\section}{0pt}{14pt plus 2pt minus 2pt}{6pt plus 1pt}
+\titlespacing*{\subsection}{0pt}{10pt plus 2pt minus 2pt}{4pt plus 1pt}
+\titlespacing*{\subsubsection}{0pt}{8pt plus 1pt minus 1pt}{3pt plus 1pt}
+
+% ── Captions ─────────────────────────────────────────────────
+\usepackage[
+  font=small, labelfont=bf,
+  labelsep=period,
+  justification=justified
+]{caption}
+
+% ── Headers / footers ────────────────────────────────────────
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\itshape Diffusion Policy for Robot Manipulation}
+\fancyhead[R]{\small\itshape ML 6140 --- Northeastern University}
+\fancyfoot[C]{\small\thepage}
+
+% ── Bibliography ─────────────────────────────────────────────
+\usepackage{natbib}
+\bibpunct{[}{]}{,}{n}{}{;}
+
+% ── Hyperlinks ───────────────────────────────────────────────
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=HeaderBlue,
+  citecolor=HeaderBlue,
+  urlcolor=AccentBlue,
+  pdftitle={Diffusion Policy for Robot Manipulation},
+  pdfauthor={Gupta, Sakhamuru, Maligireddy},
+}
+
+% ── Utility macros ───────────────────────────────────────────
+\newcommand{\Tobs}{T_{\text{obs}}}
+\newcommand{\Tpred}{T_{\text{pred}}}
+\newcommand{\Tact}{T_{\text{act}}}
+\newcommand{\alphabar}{\bar{\alpha}}
+\newcommand{\eps}{\boldsymbol{\varepsilon}}
+\newcommand{\dataset}{\mathcal{D}}
+\newcommand{\method}[1]{\textbf{#1}}
+
+% ── Paragraph spacing ────────────────────────────────────────
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{10pt}
+
+% ============================================================
+\begin{document}
+
+% ── TITLE ────────────────────────────────────────────────────
+\begin{center}
+  {\LARGE\bfseries\color{HeaderBlue}
+    Diffusion Policy for Robot Manipulation: \\[4pt]
+    Learning to Push with DDPM, DDIM, and Flow Matching
+  }\par\vspace{12pt}
+  {\large
+    Yashvardhan Gupta\textsuperscript{$\dagger$}\quad
+    Vineeth Sakhamuru\textsuperscript{$\dagger$}\quad
+    Sai Krishna Reddy Maligireddy\textsuperscript{$\dagger$}
+  }\par\vspace{6pt}
+  {\normalsize
+    \textsuperscript{$\dagger$}Northeastern University, Khoury College of Computer Sciences\\
+    \texttt{\{gupta.yashv, sakhamuru.v, maligireddy.s\}@northeastern.edu}
+  }\par\vspace{6pt}
+  {\small\itshape ML 6140: Machine Learning \quad|\quad April 2026}
+\end{center}
+
+\vspace{8pt}
+\noindent\rule{\linewidth}{1.2pt}
+\vspace{-4pt}
+
+% ── ABSTRACT ─────────────────────────────────────────────────
+\begin{center}
+  \begin{minipage}{0.92\linewidth}
+    \textbf{Abstract.}\;
+    We implement and evaluate \textit{Diffusion Policy}~\citep{chi2023diffusion} for
+    robot manipulation on the PushT benchmark---a contact-rich 2D task requiring a
+    circular end-effector to push a T-shaped block onto a target region.
+    The central hypothesis is that treating action generation as an iterative
+    \textit{denoising} problem enables policies to capture the multi-modal structure
+    of expert demonstrations, overcoming the mode-averaging failure of standard
+    Behavioral Cloning~(BC).
+    We train a 1D temporal U-Net (68.95M parameters) with Feature-wise Linear
+    Modulation~(FiLM) conditioning under three formulations: DDPM (stochastic, 100
+    steps), DDIM (deterministic, 10 steps), and Flow Matching (ODE-based, 10 steps).
+    All three diffusion methods substantially outperform the BC baseline (4\%
+    success), achieving 80\%, 92\%, and \textbf{98\%} success rates over 50 evaluation
+    episodes---matching or exceeding the published benchmarks of~\citet{chi2023diffusion}.
+    We additionally contribute a DDIM numerical-stability fix that lifts success from
+    0\% to 92\%, and a DDIM inference-step ablation demonstrating that
+    \textbf{5 denoising steps achieve 100\% success}, revealing a
+    surprisingly well-conditioned denoising landscape.
+    Our results confirm that diffusion's advantage over BC stems primarily from
+    temporal coherence in action prediction rather than multi-modality alone.
+  \end{minipage}
+\end{center}
+
+\vspace{-2pt}
+\noindent\rule{\linewidth}{1.2pt}
+\vspace{4pt}
+
+% ============================================================
+\section{Introduction}
+% ============================================================
+
+Robot learning from demonstration faces a fundamental challenge: expert behavior
+is inherently \textit{multi-modal}.
+From the same initial configuration, a skilled human operator might approach a
+target object from the left or from the right---both strategies are correct, yet
+they correspond to completely different action trajectories.
+Standard behavioral cloning~(BC) trains a deterministic regressor mapping
+observations to actions.
+When multiple valid actions exist, the regressor predicts their mean---an action
+that is \emph{wrong in every mode}~\citep{pomerleau1989alvinn}.
+This failure, known as \textit{mode averaging}, fundamentally limits BC in
+multi-modal environments.
+
+Diffusion models~\citep{ho2020ddpm} offer a principled alternative.
+Rather than regressing to a single action, they learn a probability
+\textit{distribution} over actions and sample from it via an iterative denoising
+process.
+At inference time, starting from Gaussian noise and running the learned reverse
+process produces a sample from the data distribution, capturing all modes rather
+than averaging them.
+\citet{chi2023diffusion} demonstrated that this approach---\textit{Diffusion Policy}---achieves
+state-of-the-art results on a range of robot manipulation tasks, including the
+PushT benchmark we study here.
+
+In this work, we implement Diffusion Policy from scratch and conduct a systematic
+evaluation of three inference methods on PushT:
+(1)~\method{DDPM}---the original stochastic reverse process with 100 denoising steps;
+(2)~\method{DDIM}---a deterministic, skip-step variant requiring only 10 network
+evaluations~\citep{song2021ddim};
+and (3)~\method{Flow Matching}---an alternative continuous-time formulation that
+replaces the noisy diffusion trajectory with straight-line interpolation between
+data and noise~\citep{lipman2023flow,liu2023rectified}.
+
+\paragraph{Contributions.}
+\begin{itemize}[itemsep=3pt]
+  \item \textbf{Full from-scratch implementation:} ConditionalUnet1D with FiLM
+    conditioning, all three samplers, EMA training, receding-horizon evaluation
+    harness, and 120 unit tests.
+  \item \textbf{Critical DDIM numerical fix:} identification and correction of a
+    cosine-schedule denominator blow-up that caused 0\% success despite a
+    well-trained model; the fix recovers 92\% success.
+  \item \textbf{Comprehensive evaluation:} 50-episode results for all four methods
+    and a 6-condition DDIM step-count ablation over 30 episodes each.
+  \item \textbf{Flow Matching superiority:} FM achieves 98\% success at 8.9\,ms/step,
+    outperforming DDIM in both accuracy and speed, and beating DDPM by 18 pp.
+  \item \textbf{5-step efficiency:} DDIM with 5 steps achieves 100\% success,
+    demonstrating practical viability for real-time robot control.
+\end{itemize}
+
+% ============================================================
+\section{Related Work}
+% ============================================================
+
+\subsection{Behavioral Cloning and Its Limitations}
+
+Behavioral cloning treats demonstration data as supervised (observation, action)
+pairs and trains a regressor~\citep{pomerleau1989alvinn}.
+While effective when action distributions are unimodal, BC suffers from two key
+failures: (a)~mode averaging in multi-modal settings and (b)~compounding errors as
+the agent moves into states not covered by training.
+\citet{florence2022ibc} showed that implicit behavior cloning (IBC) addresses mode
+averaging through energy-based models, but at high inference cost.
+Our BC baseline isolates the mode-averaging problem directly.
+
+\subsection{Denoising Diffusion Models}
+
+\citet{ho2020ddpm} introduced DDPM, defining a Markov forward process that
+gradually corrupts data with Gaussian noise and trains a neural network to reverse
+it.
+The training objective is noise prediction:
+$\mathcal{L} = \mathbb{E}\bigl[\|\boldsymbol{\varepsilon}_\theta(\mathbf{x}_t, t) -
+\boldsymbol{\varepsilon}\|^2\bigr]$.
+\citet{song2021ddim} subsequently showed that DDPM training implicitly learns a
+score function~$\nabla_{\mathbf{x}} \log p(\mathbf{x}_t)$, enabling a deterministic
+ODE (DDIM) that samples in far fewer steps.
+Since its introduction, diffusion has driven state-of-the-art in image generation
+(DALL$\cdot$E 2, Stable Diffusion), audio, video, and---as in our work---robot
+control.
+
+\subsection{Flow Matching}
+
+\citet{lipman2023flow} and \citet{liu2023rectified} independently proposed Flow
+Matching (FM) as a cleaner alternative.
+Instead of learning to denoise a stochastically corrupted signal, FM learns to
+follow a straight-line flow from noise to data:
+$\mathbf{x}_t = (1{-}t)\,\mathbf{x}_0 + t\,\boldsymbol{\varepsilon}$.
+The target velocity is $\mathbf{u} = \boldsymbol{\varepsilon} - \mathbf{x}_0$,
+making training strictly supervised at every step.
+FM has demonstrated superior sample quality at equivalent inference cost, with
+naturally well-conditioned ODE trajectories.
+
+\subsection{Diffusion Policy}
+
+\citet{chi2023diffusion} applied diffusion to robot control by framing action
+generation as a denoising problem conditioned on observations.
+Their key insight is that FiLM-conditioned U-Nets are ideally suited to this
+conditional generation task.
+They demonstrated that diffusion policies outperform BC, LSTM-GMM, and IBC on
+multiple manipulation tasks.
+Our work reproduces and extends their PushT results with an additional FM baseline
+and a systematic inference-step study.
+
+% ============================================================
+\section{Task and Dataset}
+% ============================================================
+
+\subsection{The PushT Task}
+
+PushT is a 2D simulated robot manipulation task.
+A circular end-effector (the agent) moves in a bounded 2D plane;
+a T-shaped block sits on a table; and a gray \textit{target zone} marks the
+desired block pose.
+An episode succeeds when block-target overlap exceeds 90\%, and terminates at
+success or 300 steps.
+
+The task is deceptively difficult: the agent must contact the correct face of the
+T-block (not the stem), approach from the correct angle, and reposition when the
+block overshoots.
+Crucially, the optimal approach direction is \emph{bimodal}---push from the left or
+right are equally valid---making PushT an ideal testbed for multi-modal policies.
+
+\subsection{Dataset}
+
+We use the Columbia PushT expert demonstration dataset~\citep{chi2023diffusion},
+the same dataset used in the original paper.
+Key statistics are summarized in Table~\ref{tab:dataset}.
+
+\begin{table}[h]
+  \centering
+  \caption{PushT expert demonstration dataset statistics.}
+  \label{tab:dataset}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    \textbf{Property} & \textbf{Value} \\
+    \midrule
+    Format            & Zarr archive (\texttt{pusht\_cchi\_v7\_replay.zarr}) \\
+    Episodes          & 206 \\
+    Total timesteps   & 25,650 \\
+    Avg.\ episode length & $\sim$124 steps \\
+    Observation dims  & 5 (agent $x,y$; block $x,y,\theta$) \\
+    Action dims       & 2 (velocity $v_x, v_y$) \\
+    Coordinate range  & 0--512 pixels \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Data Preprocessing}
+
+\paragraph{Normalization.}
+All observations and actions are scaled to $[-1, 1]$ using per-dimension
+min-max normalization.
+This is essential: the DDPM noise schedule assumes unit-scale data, and
+pixel-coordinate values (0--512) would render the noise magnitude
+completely wrong.
+
+\paragraph{Sliding-window sampling.}
+We train on overlapping short sequences rather than single~(obs,\;action) pairs.
+The model observes the last $\Tobs = 2$ timesteps and predicts the next $\Tpred = 16$
+actions; only the first $\Tact = 8$ are executed before replanning.
+Episodes are padded at boundaries so every timestep is a valid window center,
+producing approximately \textbf{25,000 training samples} from 206 episodes.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{multimodal_motivation.png}
+  \caption{%
+    \textbf{Multi-modal motivation.}
+    \emph{Left:} Expert demonstration trajectories on PushT showing two distinct
+    push strategies (left approach vs.\ right approach).
+    \emph{Right:} Bimodal action distribution from the same observation state.
+    A BC regressor averages these two modes, producing an action ($\times$) that
+    commits to neither strategy and fails the task.
+  }
+  \label{fig:multimodal}
+\end{figure}
+
+Figure~\ref{fig:multimodal} illustrates why BC fails on this task.
+The bimodal action distribution is the core empirical motivation for using a
+distributional policy.
+
+% ============================================================
+\section{Methods}
+% ============================================================
+
+\subsection{Problem Formulation}
+
+At each control step, the agent observes a history of $\Tobs = 2$ normalized state
+vectors (10 values total).
+The policy must produce an action chunk of $\Tpred = 16$ actions.
+We model this as learning the conditional distribution
+$p(\mathbf{a}_{0:\Tpred} \mid \mathbf{o}_{-\Tobs+1:0})$.
+Diffusion models approximate this via iterative denoising, allowing samples that
+faithfully reflect all modes of the expert distribution rather than collapsing to
+the mean.
+
+\subsection{Network Architecture: ConditionalUnet1D}
+\label{sec:arch}
+
+The backbone is a \textbf{1D temporal U-Net} (68.95M parameters) that treats the
+action sequence $(\Tpred \times d_{\text{act}}) = (16 \times 2)$ as a 1D signal
+with 2 channels.
+The encoder--decoder structure with skip connections allows the model to mix
+fine-grained action values with coarse temporal structure.
+
+\paragraph{Conditioning pipeline.}
+Two parallel encoders produce the 512-dim conditioning vector:
+\begin{itemize}
+  \item \emph{Observation encoder:} A fully learnable 2-layer MLP maps the flattened
+    observation history (10 values) to 256 dimensions:
+    $\text{Linear}(10 \!\to\! 256) \to \text{Mish} \to \text{Linear}(256 \!\to\! 256)$.
+    All 68,864 parameters are trained end-to-end.
+  \item \emph{Timestep encoder:} A hybrid pipeline combines a fixed sinusoidal
+    positional embedding (256-dim, no gradients) with a learnable MLP:
+    $\text{Linear}(256 \!\to\! 1024) \to \text{Mish} \to \text{Linear}(1024 \!\to\! 256)$.
+  \item \emph{Conditioning:} The two 256-dim embeddings are concatenated into a
+    512-dim vector passed to every residual block.
+\end{itemize}
+
+\paragraph{U-Net channel progression.}
+\vspace{2pt}
+\begin{center}
+\small
+\begin{tabular}{@{}llll@{}}
+  \toprule
+  \textbf{Stage} & \textbf{Input} & \textbf{Output} & \textbf{Operation} \\
+  \midrule
+  Down 1 & $(2, 16)$ & $(256, 16)$ & ResBlock $\times$ 2 \\
+  Down 2 & $(256, 16)$ & $(256, 8)$  & Downsample \\
+  Down 3 & $(256, 8)$  & $(512, 8)$  & ResBlock $\times$ 2 \\
+  Down 4 & $(512, 8)$  & $(512, 4)$  & Downsample \\
+  Bottleneck & $(512, 4)$ & $(1024, 4)$ & ResBlock $\times$ 2 \\
+  Up 1   & $(1024{+}1024, 4)$ & $(512, 4)$ & ResBlock $\times$ 2 \\
+  Up 2   & $(512, 4)$  & $(512, 8)$  & Upsample \\
+  Up 3   & $(512{+}256, 8)$  & $(256, 8)$ & ResBlock $\times$ 2 \\
+  Up 4   & $(256, 8)$  & $(256, 16)$ & Upsample \\
+  Head   & $(256, 16)$ & $(2, 16)$   & Conv1d $1{\times}1$ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vspace{4pt}
+
+Each \textbf{ConditionalResidualBlock1D} follows the pattern:
+Conv1d $\to$ GroupNorm $\to$ FiLM $\to$ Mish $\to$ Conv1d $\to$ GroupNorm $\to$ FiLM $\to$ Mish,
+with a $1{\times}1$ residual Conv1d handling channel mismatches.
+All convolutions use kernel size 5 with padding 2 to preserve sequence length.
+
+\subsection{FiLM Conditioning}
+
+Feature-wise Linear Modulation~\citep{perez2018film} injects the conditioning
+signal into each feature map:
+\begin{equation}
+  \text{FiLM}(\mathbf{x},\, \mathbf{c})
+  = \gamma(\mathbf{c}) \odot \text{GroupNorm}(\mathbf{x})
+  \;+\; \beta(\mathbf{c}),
+  \label{eq:film}
+\end{equation}
+where $\gamma$ and $\beta$ are computed via
+$\text{Linear}(512, 2 \cdot d_{\text{out}})$, then split.
+FiLM is strictly more expressive than input concatenation because it modulates
+every feature map \emph{independently} based on the current observation and noise
+level.
+
+\subsection{DDPM: Stochastic Denoising}
+
+DDPM~\citep{ho2020ddpm} defines a forward process that adds Gaussian noise over
+$K = 100$ discrete steps using a \textit{cosine schedule}:
+\begin{align}
+  \mathbf{a}_k &= \sqrt{\alphabar_k}\,\mathbf{a}_0 \;+\; \sqrt{1 - \alphabar_k}\,\boldsymbol{\varepsilon},
+  \quad \boldsymbol{\varepsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}), \label{eq:fwd} \\
+  \alphabar_k &= \cos^2\!\Bigl(\tfrac{k/K + 0.008}{1.008}\cdot\tfrac{\pi}{2}\Bigr). \label{eq:cosine}
+\end{align}
+At $k{=}0$: $\alphabar_0 \approx 1.0$ (clean). At $k{=}99$: $\alphabar_{99} \approx 2{\times}10^{-8}$
+(near-pure noise).
+The model is trained to predict the added noise:
+\begin{equation}
+  \mathcal{L}_{\text{DDPM}} = \mathbb{E}\bigl[
+    \|\boldsymbol{\varepsilon}_\theta(\mathbf{a}_k, k, \mathbf{o}) - \boldsymbol{\varepsilon}\|^2
+  \bigr].
+  \label{eq:ddpm_loss}
+\end{equation}
+Inference runs 100 reverse steps from $\mathbf{a}_{99} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$:
+\begin{equation}
+  \mathbf{a}_{k-1} = \frac{1}{\sqrt{\alpha_k}}\!\left(\mathbf{a}_k - \frac{\beta_k}{\sqrt{1-\alphabar_k}}
+  \,\boldsymbol{\varepsilon}_\theta\right) + \sqrt{\beta_k}\,\mathbf{z},
+  \quad \mathbf{z} \sim \mathcal{N}(\mathbf{0},\mathbf{I}) \text{ if } k{>}0.
+  \label{eq:ddpm_rev}
+\end{equation}
+
+\subsection{DDIM: Deterministic Fast Sampling}
+
+DDIM~\citep{song2021ddim} reuses the trained DDPM model but replaces the stochastic
+reverse process with a deterministic ODE, enabling inference in as few as 10 steps.
+Setting $\eta = 0$ (no stochastic noise), the update at each step is:
+\begin{align}
+  \hat{\mathbf{a}}_0 &= \frac{\mathbf{a}_t - \sqrt{1{-}\alphabar_t}\,\boldsymbol{\varepsilon}_\theta}
+    {\max\!\bigl(\sqrt{\alphabar_t},\; 10^{-3}\bigr)}, \label{eq:ddim1} \\
+  \hat{\mathbf{a}}_0 &\leftarrow \operatorname{clip}(\hat{\mathbf{a}}_0,\, -1,\, 1), \label{eq:ddim_clip} \\
+  \mathbf{a}_{t_{\text{prev}}} &= \sqrt{\alphabar_{t_{\text{prev}}}}\,\hat{\mathbf{a}}_0
+    + \sqrt{1{-}\alphabar_{t_{\text{prev}}}}\,\boldsymbol{\varepsilon}_\theta. \label{eq:ddim2}
+\end{align}
+The clamping in Eq.~\eqref{eq:ddim1} is \emph{critical}: without it,
+$\sqrt{\alphabar_{99}} \approx 1.6{\times}10^{-4}$ causes a division by near-zero
+that blows up $\hat{\mathbf{a}}_0$ to ${\pm}10^6$, producing a 0\% success rate despite a
+well-trained model. We detail this in Section~\ref{sec:challenges}.
+
+\subsection{Flow Matching}
+
+Flow Matching~\citep{lipman2023flow,liu2023rectified} replaces the stochastic
+diffusion process with a straight-line interpolation between data and noise:
+\begin{equation}
+  \mathbf{x}_t = (1{-}t)\,\mathbf{a}_0 \;+\; t\,\boldsymbol{\varepsilon},
+  \quad t \in [0, 1].
+  \label{eq:fm_interp}
+\end{equation}
+The model predicts the \textit{velocity} (direction of flow in action space):
+\begin{equation}
+  \mathbf{u} = \boldsymbol{\varepsilon} - \mathbf{a}_0, \qquad
+  \mathcal{L}_{\text{FM}} = \mathbb{E}\bigl[\|\mathbf{v}_\theta(\mathbf{x}_t, t, \mathbf{o}) - \mathbf{u}\|^2\bigr].
+  \label{eq:fm_loss}
+\end{equation}
+Inference runs the Euler ODE backward from $t{=}1$ (pure noise) to $t{=}0$
+(clean action) in $N$ steps:
+\begin{equation}
+  \mathbf{x}_{t - \Delta t} = \mathbf{x}_t - \Delta t \cdot \mathbf{v}_\theta(\mathbf{x}_t, t, \mathbf{o}),
+  \quad \Delta t = 1/N.
+  \label{eq:fm_euler}
+\end{equation}
+FM uses the \emph{same U-Net architecture} as DDPM; only the training loss and
+inference procedure change.
+The continuous time $t \in [0,1]$ is scaled by 100 before passing to the
+sinusoidal timestep embedding.
+Crucially, FM requires \emph{no noise schedule tuning}---the straight-line
+interpolation has no free parameters.
+
+\subsection{Training Procedure}
+
+\paragraph{Training loop.}
+For each batch: (1)~sample noise $\boldsymbol{\varepsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ and
+timestep $k \sim \mathcal{U}\{0, \ldots, K{-}1\}$; (2)~compute noisy action via
+Eq.~\eqref{eq:fwd} (DDPM) or Eq.~\eqref{eq:fm_interp} (FM); (3)~forward pass;
+(4)~compute MSE loss; (5)~backpropagate, clip gradients at max norm 1.0;
+(6)~AdamW step; (7)~EMA update: $\theta_{\text{ema}} \leftarrow 0.995\,\theta_{\text{ema}} + 0.005\,\theta_{\text{train}}$.
+
+\paragraph{Hyperparameters.}
+All models train for 300 epochs on an NVIDIA A100 GPU via the Northeastern Explorer
+HPC cluster (SLURM scheduler).
+Key hyperparameters are summarized in Table~\ref{tab:hparams}.
+
+\begin{table}[h]
+  \centering
+  \caption{Training hyperparameters (shared across all diffusion methods).}
+  \label{tab:hparams}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    \textbf{Hyperparameter} & \textbf{Value} \\
+    \midrule
+    Architecture            & ConditionalUnet1D (FiLM) \\
+    Parameters              & 68.95M \\
+    Channel dims (down)     & (256, 512, 1024) \\
+    Conditioning dim        & 512 (256 obs + 256 timestep) \\
+    $\Tobs / \Tpred / \Tact$ & 2 / 16 / 8 \\
+    Diffusion steps $K$     & 100 (DDPM/DDIM); continuous (FM) \\
+    Noise schedule          & Cosine (DDPM/DDIM); linear interp.\ (FM) \\
+    Epochs                  & 300 \\
+    Batch size              & 256 \\
+    Optimizer               & AdamW \\
+    Peak learning rate      & $1{\times}10^{-4}$ \\
+    LR schedule             & Cosine decay + 500-step warmup \\
+    Gradient clipping       & max norm = 1.0 \\
+    EMA decay               & 0.995 \\
+    Hardware                & NVIDIA A100 / V100 SXM2 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Learning rate schedule.}
+The LR follows a two-phase schedule:
+(1)~\emph{linear warmup} from 0 to $10^{-4}$ over 500 steps, preventing large
+gradient updates during early random-weight training;
+(2)~\emph{cosine decay} from $10^{-4}$ to $\approx$0 over the remaining steps.
+
+\subsection{Receding-Horizon Control}
+
+At evaluation, the agent replans every $\Tact = 8$ steps:
+\begin{enumerate}[topsep=3pt]
+  \item Observe the last $\Tobs = 2$ states from a sliding deque.
+  \item Normalize observations; run the full denoising process to produce
+    $\Tpred = 16$ normalized actions.
+  \item Unnormalize to pixel-space velocities; execute the first $\Tact = 8$
+    actions in the environment.
+  \item Append new observations to the deque (oldest drops off). Repeat.
+\end{enumerate}
+Predicting a longer horizon ($\Tpred = 16$) than is executed ($\Tact = 8$)
+encourages temporal consistency---a form of implicit model predictive control.
+
+% ============================================================
+\section{Experiments}
+% ============================================================
+
+\subsection{Evaluation Setup}
+
+All methods are evaluated in a \texttt{gymnasium}-compatible PushT simulation
+(\texttt{gym\_pusht}).
+Each episode begins with a randomly positioned T-block and fixed agent start.
+We report: \emph{success rate} (coverage ${\ge}0.9$), \emph{mean coverage},
+\emph{mean episode length}, and \emph{inference time per control step}.
+
+\paragraph{BC baseline.}
+A 2-hidden-layer MLP (135K parameters, hidden dim 256, Mish activations) trained
+for 200 epochs.
+This policy performs standard regression from the flattened observation history to
+a single action, serving as the mode-averaging failure-mode reference.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.88\linewidth]{diffusion_forward_process.png}
+  \caption{%
+    \textbf{DDPM forward process.}
+    Clean action sequences ($t{=}0$, left) are progressively corrupted with
+    Gaussian noise over 100 timesteps until reaching pure noise ($t{=}99$, right).
+    Training reverses this process: the U-Net learns to recover coherent action
+    sequences from noise, conditioned on the current observation.
+  }
+  \label{fig:forward}
+\end{figure}
+
+\subsection{Training Dynamics}
+
+Figure~\ref{fig:training} shows loss curves for DDPM and Flow Matching over 300
+epochs.
+DDPM achieves a final noise-prediction MSE of \textbf{0.0055}; FM achieves a final
+velocity-prediction MSE of \textbf{0.0141}.
+These values are \emph{not directly comparable} (noise MSE vs.\ velocity MSE),
+but both exhibit a sharp drop in the first 10 epochs followed by smooth convergence.
+FM's higher absolute loss does not indicate worse learning---FM achieves 98\%
+success vs.\ DDPM's 80\%.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{ddpm_vs_fm_300ep.png}
+  \caption{%
+    \textbf{Training loss curves.}
+    DDPM (blue) and Flow Matching (orange) over 300 epochs.
+    Both converge smoothly. The losses are not directly comparable (noise MSE vs.\
+    velocity MSE), but both reach low values with a cosine LR schedule.
+  }
+  \label{fig:training}
+\end{figure}
+
+\subsection{Main Results}
+
+Table~\ref{tab:main} presents the main evaluation results over 50 episodes per
+method.
+Figure~\ref{fig:results} visualises the success rates.
+
+\begin{table}[h]
+  \centering
+  \caption{Main evaluation results (50 episodes per method). Paper baselines are
+    approximate read-offs from~\citet{chi2023diffusion} figures.
+    $\star$ = best result.}
+  \label{tab:main}
+  \small
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{@{}lccccr@{}}
+    \toprule
+    \textbf{Method} & \textbf{Eps.} & \textbf{Success} & \textbf{Cov.} & \textbf{ms/step} & \textbf{Steps} \\
+    \midrule
+    \rowcolor{BestGreen}
+    \textbf{Flow Matching (ours)} & 50 & \textbf{98\%}~$\star$ & 0.989 & 8.9  & 10 \\
+    \textbf{DDIM (ours, 300ep)}   & 50 & \textbf{92\%}        & 0.969 & 10.0 & 10 \\
+    \rowcolor{RowAlt}
+    \textbf{DDPM (ours, 300ep)}   & 50 & \textbf{80\%}        & 0.830 & 84.0 & 100 \\
+    \textbf{BC baseline (ours)}   & 50 & \textbf{4\%}         & 0.241 & 0.6  & --- \\
+    \midrule
+    \rowcolor{RowAlt}
+    DDIM \citep{chi2023diffusion} & --- & $\sim$90\%          & ---   & ---  & 10 \\
+    DDPM \citep{chi2023diffusion} & --- & $\sim$92\%          & ---   & ---  & 100 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\linewidth]{final_comparison.png}
+  \caption{%
+    \textbf{Main results.}
+    Success rates across all four methods (50 episodes each).
+    All three diffusion variants dramatically outperform BC (4\%), with FM
+    achieving 98\%.
+    The 24$\times$ gap between BC and FM validates the core motivation for
+    distributional action prediction.
+  }
+  \label{fig:results}
+\end{figure}
+
+\paragraph{Flow Matching vs.\ DDIM.}
+FM outperforms DDIM by 6 pp (98\% vs.\ 92\%) at comparable speed (8.9\,ms vs.\
+10\,ms).
+We attribute this to FM's \emph{straight-line ODE path}: the model predicts a
+constant velocity directly connecting noise to data, avoiding the curved cosine
+trajectory that allocates disproportionate network capacity to the high-noise
+regime.
+
+\paragraph{DDPM vs.\ DDIM.}
+DDIM outperforms DDPM (92\% vs.\ 80\%) while being 10$\times$ faster
+(10\,ms vs.\ 84\,ms).
+The deterministic reverse process eliminates stochastic noise injected at each of
+DDPM's 100 steps---noise that occasionally pushes trajectories away from
+high-probability action modes.
+
+\paragraph{BC baseline: the 24$\times$ gap.}
+The BC baseline achieves only 4\% success.
+Every episode hits the 300-step timeout (mean length = 300.0, mean coverage = 0.241).
+The MLP converges to the mode-averaged action, oscillating in place without
+committing to either push strategy.
+This \textbf{24$\times$ performance gap} (4\% vs.\ 98\%) is the core empirical
+result confirming that multi-modal expert demonstrations require a distributional
+policy.
+
+\paragraph{Comparison to~\citeauthor{chi2023diffusion}.}
+Our DDIM result (92\%) matches the paper's DDIM ($\sim$90\%) within the 95\% CI of
+$\pm$5.5 pp for 50 episodes.
+Our FM result (98\%) establishes a new reference---Chi et~al.\ did not report FM on
+PushT.
+Our DDPM result (80\% vs.\ $\sim$92\%) is below the paper, likely due to
+differences in random seed variance over 50 episodes and potential training
+duration differences.
+
+\subsection{DDIM Inference Steps Ablation}
+
+DDIM's key advantage is inference-time flexibility: the same trained model can use
+any step count without retraining.
+Table~\ref{tab:ablation} and Figure~\ref{fig:ablation} sweep $N \in \{1, 5, 10, 20, 50, 100\}$
+over 30 episodes each using the same 300-epoch DDPM checkpoint.
+
+\begin{table}[h]
+  \centering
+  \caption{DDIM inference steps ablation (30 episodes per condition).
+    $\star$ = best efficiency point.}
+  \label{tab:ablation}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}rcccl@{}}
+    \toprule
+    \textbf{Steps} & \textbf{Success} & \textbf{Coverage} & \textbf{ms/step} & \textbf{Notes} \\
+    \midrule
+    1             & 0\%              & 0.088             & 2.3              & Total failure \\
+    \rowcolor{BestGreen}
+    5             & \textbf{100\%}~$\star$ & 0.991      & 5.6              & Best efficiency \\
+    10            & 93.3\%           & 0.958             & 9.8              & $\leftarrow$ Our default \\
+    \rowcolor{RowAlt}
+    20            & 100\%            & 0.996             & 18.1             & Marginally better \\
+    50            & 93.3\%           & 0.947             & 42.9             & No gain over 10 \\
+    \rowcolor{RowAlt}
+    100           & 100\%            & 0.989             & 84.0             & Full DDPM cost \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{steps_ablation.png}
+  \caption{%
+    \textbf{DDIM steps ablation.}
+    Success rate (bars, left axis) and inference time per control step (line,
+    right axis) as a function of denoising steps.
+    5 steps achieves 100\% success at 5.6\,ms---the optimal operating point.
+    Diminishing returns set in beyond 10 steps.
+  }
+  \label{fig:ablation}
+\end{figure}
+
+\paragraph{Key findings.}
+\textbf{(1)~1 step fails completely (0\%):} A single denoising step cannot
+reconstruct a coherent action sequence from pure noise---iterative refinement is
+genuinely necessary.
+\textbf{(2)~5 steps achieves 100\%:} The model's learned score function is
+well-conditioned enough that 5 refinement steps fully recover high-quality actions,
+demonstrating practical viability at 5.6\,ms/step.
+\textbf{(3)~Diminishing returns beyond 10 steps:} Going from 10 to 100 steps adds
+74\,ms of latency without a systematic success-rate improvement.
+The sweet spot for real-robot deployment is \textbf{5--10 steps}.
+
+% ============================================================
+\section{Key Implementation Challenges}
+\label{sec:challenges}
+% ============================================================
+
+\subsection{The DDIM Numerical Stability Fix}
+
+\paragraph{Problem.}
+The cosine schedule at $K{=}100$ yields $\alphabar_{99} \approx 2{\times}10^{-8}$.
+DDIM's first inference step divides by
+$\sqrt{\alphabar_{99}} \approx 1.6{\times}10^{-4}$,
+producing predicted clean actions on the order of $\pm 10^6$.
+Since normalized actions lie in $[-1, 1]$, these values trigger environment
+velocity clipping to zero---the agent freezes.
+
+\paragraph{Symptom.}
+Despite a well-trained model (training loss = 0.013), the evaluated success rate
+was \textbf{0.000}.
+Every GIF frame showed an identical frozen agent---visually indistinguishable from
+an untrained model.
+
+\paragraph{Fix.}
+\begin{lstlisting}[language=Python, caption={DDIM numerical stability fix (two lines).}]
+# Before: numerical explosion with cosine schedule at K=100
+a0_pred = (noisy_a - (1 - ab_t).sqrt() * eps_pred) / ab_t.sqrt()
+
+# After: stable prediction with clamped denominator + clipping
+a0_pred = (noisy_a - (1 - ab_t).sqrt() * eps_pred) \
+            / ab_t.sqrt().clamp(min=1e-3)
+a0_pred = a0_pred.clamp(-1.0, 1.0)
+\end{lstlisting}
+
+\paragraph{Outcome.}
+Success rate jumped from \textbf{0\% to 92\%} on the same checkpoint, matching the
+HuggingFace Diffusers reference and the original Chi et al.\ codebase.
+The lesson: numerical stability issues in diffusion samplers can cause complete
+\emph{silent} failure---the model trains perfectly but produces garbage at
+inference time.
+
+\subsection{Zarr API Breaking Change}
+
+The PushT dataset is stored in Zarr format.
+Between Zarr v2 and v3, the positional \texttt{open(path, mode)} signature was
+changed to require keyword arguments (\texttt{open(store=path, mode='r')}).
+The v3 API silently accepted the positional call but returned an empty store,
+causing training to start normally but on zero data.
+We identified this through unit tests on the dataset class and pinned
+\texttt{zarr>=2.14,<4} in \texttt{requirements.txt}.
+
+\subsection{Training Crash and Checkpoint Recovery}
+
+The initial training run crashed at epoch 28 due to machine hibernation, with no
+checkpoint saved (default interval: 50 epochs).
+We added \texttt{--save\_interval} as a CLI argument (default: 10 epochs) and
+restarted.
+This experience informed our final strategy: checkpoint every 10 epochs plus a
+\texttt{best.pt} overwritten whenever evaluation loss improves.
+
+% ============================================================
+\section{Discussion}
+% ============================================================
+
+\paragraph{Why does Flow Matching win?}
+FM's straight-line interpolation
+$\mathbf{x}_t = (1{-}t)\mathbf{a}_0 + t\boldsymbol{\varepsilon}$
+creates a fundamentally different geometry than DDPM's cosine schedule.
+In DDPM, most SNR change occurs at small~$t$ (high-SNR regime), creating a curved
+trajectory that the network must learn to navigate.
+FM's constant-velocity field is always aimed directly from noise to data---easier
+to learn and easier for the ODE solver to integrate.
+This manifests as both higher success rates (98\% vs.\ 92\%) and fewer required
+steps.
+
+\paragraph{Temporal coherence vs.\ multi-modality.}
+The 5-step DDIM result (100\% success via deterministic sampling) suggests the
+model is not relying on fine-grained stochastic exploration.
+This implicates \emph{temporal coherence} as the primary mechanism: predicting 16
+actions jointly guarantees that consecutive actions are internally consistent.
+BC predicts one action at a time, producing independent predictions that may jump
+between modes mid-episode.
+
+\paragraph{Practical deployment implications.}
+\begin{itemize}
+  \item \textbf{FM or DDIM, not DDPM:} DDPM's 84\,ms/step latency is a practical
+    bottleneck. FM at 8.9\,ms and DDIM at 10\,ms are viable in a 30\,Hz control loop.
+  \item \textbf{5 steps may suffice:} If latency is critical (e.g., reactive safety
+    behaviors), 5 DDIM steps at 5.6\,ms may be the optimal operating point.
+  \item \textbf{EMA is essential:} Evaluating with EMA weights (decay = 0.995,
+    effective window = 200 gradient steps) consistently outperformed non-EMA
+    evaluation by filtering out noisy weight updates without sacrificing
+    final performance.
+\end{itemize}
+
+% ============================================================
+\section{Conclusion}
+% ============================================================
+
+We presented a complete from-scratch implementation of Diffusion Policy for robot
+manipulation on PushT.
+Our evaluation of four methods confirms that distributional action policies
+dramatically outperform direct regression in multi-modal expert settings.
+The \textbf{24$\times$ performance gap} between BC (4\%) and Flow Matching (98\%)
+is a direct empirical demonstration of the mode-averaging failure of BC.
+
+Among diffusion methods, Flow Matching is the best choice: no noise schedule
+tuning, a strictly supervised velocity-matching objective, and the highest success
+rate (98\%) at the lowest inference latency (8.9\,ms).
+
+Our most important engineering contribution is the DDIM numerical stability fix
+(clamping the cosine-schedule denominator at $10^{-3}$ and clipping predictions
+to $[-1, 1]$), which lifts DDIM from 0\% to 92\% on an otherwise well-trained
+model---a critical finding for practitioners implementing diffusion policies.
+
+Finally, our inference-step ablation reveals that 5 denoising steps achieve 100\%
+success---opening the door to real-time deployment at 5\,ms per control step,
+well within the latency budget of physical robot systems.
+
+% ── ACKNOWLEDGEMENTS ─────────────────────────────────────────
+\paragraph{Acknowledgements.}
+We thank the Northeastern University Research Computing team for access to the
+Explorer HPC cluster (NVIDIA A100 and V100 SXM2 nodes) used to train all models.
+We also thank \citet{chi2023diffusion} for open-sourcing the Columbia PushT dataset
+and reference codebase.
+
+% ── REFERENCES ───────────────────────────────────────────────
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}

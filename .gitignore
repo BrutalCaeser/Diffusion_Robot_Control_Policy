@@ -70,8 +70,10 @@ outputs/
 *.jpg
 !docs/*.png
 !docs/*.jpg
-# Track the generated presentation
+# Track the generated presentation and paper
 !Diffusion_Policy_PushT.pptx
+!Diffusion_Policy_Paper.pdf
+!Diffusion_Policy_Paper.docx
 
 # Track key result plots (not GIFs, not per-episode frames)
 !plots/multimodal_motivation.png
